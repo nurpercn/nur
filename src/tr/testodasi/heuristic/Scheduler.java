@@ -123,15 +123,14 @@ public final class Scheduler {
       chambers.add(new ChamberInstance(spec, env));
     }
 
-    List<Project> ordered = projects.stream().map(Project::copy)
-        .sorted(Comparator.comparingInt(p -> p.dueDateDays))
-        .toList();
+    List<Project> remaining = new ArrayList<>(projects.stream().map(Project::copy).toList());
 
     int totalLateness = 0;
     List<ProjectResult> results = new ArrayList<>();
     List<ScheduledJob> schedule = new ArrayList<>();
 
-    for (Project p : ordered) {
+    while (!remaining.isEmpty()) {
+      Project p = pickNextProject(remaining, chambers);
       int[] sampleAvail = new int[p.samples];
       int projectCompletion = 0;
 
@@ -173,12 +172,12 @@ public final class Scheduler {
 
       // List scheduling: her adımda (kalan testler içinden) en erken başlayabileni seç.
       int maxStartOther = otherPhaseEarliest;
-      List<TestDef> remaining = new ArrayList<>(others);
-      while (!remaining.isEmpty()) {
+      List<TestDef> remainingOtherTests = new ArrayList<>(others);
+      while (!remainingOtherTests.isEmpty()) {
         Planned best = null;
         int bestIdx = -1;
-        for (int i = 0; i < remaining.size(); i++) {
-          TestDef t = remaining.get(i);
+        for (int i = 0; i < remainingOtherTests.size(); i++) {
+          TestDef t = remainingOtherTests.get(i);
           Planned cand = planBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, otherPhaseEarliest, sampleAvail);
           if (best == null
               || cand.start < best.start
@@ -191,7 +190,7 @@ public final class Scheduler {
           throw new IllegalStateException("Failed to plan other test assignment for project " + p.id);
         }
 
-        TestDef chosen = remaining.remove(bestIdx);
+        TestDef chosen = remainingOtherTests.remove(bestIdx);
         apply(best, sampleAvail);
         maxStartOther = Math.max(maxStartOther, best.start);
         projectCompletion = Math.max(projectCompletion, best.end);
@@ -217,6 +216,85 @@ public final class Scheduler {
     }
 
     return new EvalResult(totalLateness, results, schedule);
+  }
+
+  private static Project pickNextProject(List<Project> remaining, List<ChamberInstance> chambers) {
+    if (remaining.size() == 1) {
+      return remaining.remove(0);
+    }
+
+    if (Data.PROJECT_DISPATCH_RULE == Data.ProjectDispatchRule.EDD) {
+      int bestIdx = 0;
+      int bestDue = remaining.get(0).dueDateDays;
+      for (int i = 1; i < remaining.size(); i++) {
+        int d = remaining.get(i).dueDateDays;
+        if (d < bestDue) {
+          bestDue = d;
+          bestIdx = i;
+        }
+      }
+      return remaining.remove(bestIdx);
+    }
+
+    // ATC (Apparent Tardiness Cost) - dinamik: t, p, p_bar ile skorla.
+    int t = globalEarliestTime(chambers);
+    double pBar = averageWork(remaining);
+    double k = Data.ATC_K <= 0 ? 3.0 : Data.ATC_K;
+
+    int bestIdx = 0;
+    double bestScore = Double.NEGATIVE_INFINITY;
+    int bestDue = Integer.MAX_VALUE;
+    for (int i = 0; i < remaining.size(); i++) {
+      Project p = remaining.get(i);
+      double proc = Math.max(1.0, estimatedWork(p));
+      double slack = p.dueDateDays - t - proc;
+      double urgency = Math.max(0.0, -slack); // tardy/near-tardy -> larger
+      // ATC skor: 1/proc * exp( - max(0, slack) / (k * pBar) )
+      double expTerm = Math.exp(-(Math.max(0.0, slack)) / (k * Math.max(1.0, pBar)));
+      double score = (1.0 / proc) * expTerm + 1e-9 * urgency;
+
+      if (score > bestScore || (score == bestScore && p.dueDateDays < bestDue)) {
+        bestScore = score;
+        bestIdx = i;
+        bestDue = p.dueDateDays;
+      }
+    }
+
+    return remaining.remove(bestIdx);
+  }
+
+  private static int globalEarliestTime(List<ChamberInstance> chambers) {
+    int best = Integer.MAX_VALUE;
+    for (ChamberInstance ch : chambers) {
+      for (int a : ch.stationAvail) {
+        if (a < best) best = a;
+      }
+    }
+    return best == Integer.MAX_VALUE ? 0 : best;
+  }
+
+  private static double averageWork(List<Project> ps) {
+    double sum = 0.0;
+    for (Project p : ps) sum += estimatedWork(p);
+    return ps.isEmpty() ? 1.0 : (sum / ps.size());
+  }
+
+  /**
+   * Proje iş yükü tahmini (ATC için): tüm required test süreleri + pulldown (S*dur) + CU testleri.
+   * Bu sadece öncelik hesabı içindir; gerçek completion hesaplaması scheduler tarafından yapılır.
+   */
+  private static double estimatedWork(Project p) {
+    double w = 0.0;
+    for (int ti = 0; ti < Data.TESTS.size(); ti++) {
+      if (!p.required[ti]) continue;
+      TestDef t = Data.TESTS.get(ti);
+      if (t.category == TestCategory.PULLDOWN) {
+        w += (double) p.samples * t.durationDays;
+      } else {
+        w += t.durationDays;
+      }
+    }
+    return w;
   }
 
   private static boolean isRequired(Project p, String testId) {

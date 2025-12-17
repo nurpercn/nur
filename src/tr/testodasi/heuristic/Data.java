@@ -14,6 +14,13 @@ import java.util.Map;
 public final class Data {
   private Data() {}
 
+  public enum ProjectDispatchRule {
+    /** Earliest Due Date (mevcut baseline). */
+    EDD,
+    /** Apparent Tardiness Cost (dinamik öncelik). */
+    ATC
+  }
+
   /**
    * Pulldown sonrası \"Other Tests\" başlangıç kuralı.
    *
@@ -21,6 +28,12 @@ public final class Data {
    * - false => Sadece ilgili sample'ın pulldown'u bittiyse o sample üzerinde other test başlayabilir (manuel hesaplarda sık görülen yorum).
    */
   public static final boolean OTHER_TESTS_WAIT_FOR_ALL_PULLDOWNS = true;
+
+  /** Stage2 proje çizelgeleme sıralama kuralı. */
+  public static final ProjectDispatchRule PROJECT_DISPATCH_RULE = ProjectDispatchRule.ATC;
+
+  /** ATC parametresi (tipik 2..4). */
+  public static final double ATC_K = 3.0;
 
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
   public static final int DUE_DATE_OFFSET_DAYS = 0;
@@ -146,6 +159,7 @@ public final class Data {
 
   /** Proje bazlı due date (Excel due date kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
   public static final int[] DUE_DATES = new int[]{
+      30, 60, 95, 120, 50, 70,
       30, 60, 95, 120, 50, 70,
       30, 60, 95, 120, 50, 70,
       30, 60, 95, 120, 50, 70,
