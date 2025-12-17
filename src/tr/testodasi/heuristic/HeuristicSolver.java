@@ -115,10 +115,9 @@ public final class HeuristicSolver {
     Map<Env, Long> demandTotal = new HashMap<>();
     Map<Env, Long> demandVolt = new HashMap<>();
 
-    Set<Env> allEnvs = new LinkedHashSet<>();
-    for (TestDef t : Data.TESTS) {
-      allEnvs.add(t.env);
-    }
+    // İş listesi -> env bazlı toplam iş yükü (jobCount * durationDays).
+    // Bu set sadece gerçekten talep olan env'leri içerir (dengeyi bozan gereksiz atamaları engeller).
+    Set<Env> demandedEnvs = new LinkedHashSet<>();
 
     for (Project p : projects) {
       for (int ti = 0; ti < Data.TESTS.size(); ti++) {
@@ -131,7 +130,12 @@ public final class HeuristicSolver {
         long w = (long) jobs * (long) t.durationDays;
         demandTotal.merge(t.env, w, Long::sum);
         if (p.needsVoltage) demandVolt.merge(t.env, w, Long::sum);
+        demandedEnvs.add(t.env);
       }
+    }
+
+    if (demandedEnvs.isEmpty()) {
+      throw new IllegalStateException("No demanded environments; check project test matrix.");
     }
 
     // assigned station counts per env
@@ -149,7 +153,7 @@ public final class HeuristicSolver {
 
     // 1) volt rooms
     for (ChamberSpec c : voltRooms) {
-      Env best = pickBestEnv(c, allEnvs, demandVolt, demandTotal, assignedStationsVolt, assignedStationsTotal, true);
+      Env best = pickBestEnv(c, demandedEnvs, demandVolt, demandTotal, assignedStationsVolt, assignedStationsTotal, true);
       assignment.put(c.id, best);
       assignedStationsTotal.merge(best, c.stations, Integer::sum);
       assignedStationsVolt.merge(best, c.stations, Integer::sum);
@@ -158,13 +162,13 @@ public final class HeuristicSolver {
     // 2) non-volt rooms
     for (ChamberSpec c : nonVoltRooms) {
       // non-volt room'lar 85% destekliyorsa yine seçebilir; voltaj iş yükü zaten volt odalara gitti.
-      Env best = pickBestEnv(c, allEnvs, demandTotal, demandTotal, assignedStationsTotal, assignedStationsTotal, false);
+      Env best = pickBestEnv(c, demandedEnvs, demandTotal, demandTotal, assignedStationsTotal, assignedStationsTotal, false);
       assignment.put(c.id, best);
       assignedStationsTotal.merge(best, c.stations, Integer::sum);
     }
 
     // Feasibility repair: voltaj ihtiyacı olan env'ler için en az 1 voltajlı oda olmalı
-    for (Env env : allEnvs) {
+    for (Env env : demandedEnvs) {
       long dv = demandVolt.getOrDefault(env, 0L);
       if (dv <= 0) continue;
       int asg = assignedStationsVolt.getOrDefault(env, 0);
@@ -193,13 +197,30 @@ public final class HeuristicSolver {
     }
 
     // Feasibility check: her env talep varsa en az 1 oda
-    for (Env env : allEnvs) {
+    for (Env env : demandedEnvs) {
       if (demandTotal.getOrDefault(env, 0L) <= 0) continue;
       boolean any = assignment.values().stream().anyMatch(e -> e.equals(env));
       if (!any) {
-        // en düşük talep env'inden bir odayı çevir
-        String swapId = assignment.keySet().iterator().next();
-        assignment.put(swapId, env);
+        // En düşük toplam skorlu (talep/istasyon) env'ye atanmış bir odayı çevir (minimal zarar).
+        String bestSwapId = null;
+        double bestSwapScore = Double.POSITIVE_INFINITY;
+        for (ChamberSpec c : Data.CHAMBERS) {
+          Env cur = assignment.get(c.id);
+          if (cur == null) continue;
+          if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
+
+          long curDemand = demandTotal.getOrDefault(cur, 0L);
+          int curStations = assignedStationsTotal.getOrDefault(cur, 0);
+          double curScore = curDemand / (curStations + 1.0);
+          if (curScore < bestSwapScore) {
+            bestSwapScore = curScore;
+            bestSwapId = c.id;
+          }
+        }
+        if (bestSwapId == null) {
+          throw new IllegalStateException("Feasible oda ataması yok: env " + env + " için oda çevrilemiyor");
+        }
+        assignment.put(bestSwapId, env);
       }
     }
 
