@@ -8,13 +8,52 @@ import java.util.Map;
 import java.util.Objects;
 
 public final class Scheduler {
+  public static final class ScheduledJob {
+    public final String projectId;
+    public final String testId;
+    public final TestCategory category;
+    public final Env env;
+    public final int durationDays;
+    public final String chamberId;
+    public final int stationIdx;
+    public final int sampleIdx;
+    public final int start;
+    public final int end;
+
+    public ScheduledJob(
+        String projectId,
+        String testId,
+        TestCategory category,
+        Env env,
+        int durationDays,
+        String chamberId,
+        int stationIdx,
+        int sampleIdx,
+        int start,
+        int end
+    ) {
+      this.projectId = projectId;
+      this.testId = testId;
+      this.category = category;
+      this.env = env;
+      this.durationDays = durationDays;
+      this.chamberId = chamberId;
+      this.stationIdx = stationIdx;
+      this.sampleIdx = sampleIdx;
+      this.start = start;
+      this.end = end;
+    }
+  }
+
   public static final class EvalResult {
     public final int totalLateness;
     public final List<ProjectResult> projectResults;
+    public final List<ScheduledJob> schedule;
 
-    public EvalResult(int totalLateness, List<ProjectResult> projectResults) {
+    public EvalResult(int totalLateness, List<ProjectResult> projectResults, List<ScheduledJob> schedule) {
       this.totalLateness = totalLateness;
       this.projectResults = projectResults;
+      this.schedule = schedule;
     }
   }
 
@@ -74,6 +113,7 @@ public final class Scheduler {
 
     int totalLateness = 0;
     List<ProjectResult> results = new ArrayList<>();
+    List<ScheduledJob> schedule = new ArrayList<>();
 
     for (Project p : ordered) {
       int[] sampleAvail = new int[p.samples];
@@ -86,6 +126,7 @@ public final class Scheduler {
         Assignment a = assignBest(chambers, p.needsVoltage, gas.env, gas.durationDays, 0, 0, sampleAvail);
         gasEnd = a.end;
         projectCompletion = Math.max(projectCompletion, a.end);
+        schedule.add(new ScheduledJob(p.id, gas.id, gas.category, gas.env, gas.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
       }
 
       // 2) PULLDOWN: S adet paralel job (sample başına 1)
@@ -98,6 +139,7 @@ public final class Scheduler {
           Assignment a = assignBest(chambers, p.needsVoltage, pd.env, pd.durationDays, earliest, s, sampleAvail);
           maxEnd = Math.max(maxEnd, a.end);
           projectCompletion = Math.max(projectCompletion, a.end);
+          schedule.add(new ScheduledJob(p.id, pd.id, pd.category, pd.env, pd.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
         }
         pulldownEnd = maxEnd;
       }
@@ -119,6 +161,7 @@ public final class Scheduler {
         Assignment a = assignBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, otherPhaseEarliest, sampleAvail);
         maxStartOther = Math.max(maxStartOther, a.start);
         projectCompletion = Math.max(projectCompletion, a.end);
+        schedule.add(new ScheduledJob(p.id, t.id, t.category, t.env, t.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
       }
 
       // 4) CONSUMER USAGE: start >= maxStartOther
@@ -128,6 +171,7 @@ public final class Scheduler {
         int earliest = Math.max(otherPhaseEarliest, maxStartOther);
         Assignment a = assignBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, earliest, sampleAvail);
         projectCompletion = Math.max(projectCompletion, a.end);
+        schedule.add(new ScheduledJob(p.id, t.id, t.category, t.env, t.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
       }
 
       int lateness = Math.max(0, projectCompletion - p.dueDateDays);
@@ -135,7 +179,7 @@ public final class Scheduler {
       results.add(new ProjectResult(p.id, projectCompletion, p.dueDateDays, lateness));
     }
 
-    return new EvalResult(totalLateness, results);
+    return new EvalResult(totalLateness, results, schedule);
   }
 
   private static boolean isRequired(Project p, String testId) {

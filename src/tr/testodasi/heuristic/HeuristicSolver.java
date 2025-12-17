@@ -45,7 +45,7 @@ public final class HeuristicSolver {
       List<Project> improved = stage2_increaseSamples(room, current);
       Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
 
-      solutions.add(new Solution(iter, eval.totalLateness, deepCopy(improved), room, eval.projectResults));
+      solutions.add(new Solution(iter, eval.totalLateness, deepCopy(improved), room, eval.projectResults, eval.schedule));
 
       prevRoom = room;
       current = deepCopy(improved);

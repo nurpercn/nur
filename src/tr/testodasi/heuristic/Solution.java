@@ -9,12 +9,21 @@ public final class Solution {
   public final List<Project> projects; // includes final samples
   public final Map<String, Env> chamberEnv; // chamberId -> assigned env
   public final List<ProjectResult> results;
+  public final List<Scheduler.ScheduledJob> schedule;
 
-  public Solution(int iteration, int totalLateness, List<Project> projects, Map<String, Env> chamberEnv, List<ProjectResult> results) {
+  public Solution(
+      int iteration,
+      int totalLateness,
+      List<Project> projects,
+      Map<String, Env> chamberEnv,
+      List<ProjectResult> results,
+      List<Scheduler.ScheduledJob> schedule
+  ) {
     this.iteration = iteration;
     this.totalLateness = totalLateness;
     this.projects = projects;
     this.chamberEnv = chamberEnv;
     this.results = results;
+    this.schedule = schedule;
   }
 }
