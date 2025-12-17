@@ -128,10 +128,7 @@ public final class HeuristicSolver {
         if (t.category == TestCategory.PULLDOWN) jobs = p.samples;
 
         long w = (long) jobs * (long) t.durationDays;
-        // Pulldown darboğazını azaltmak için AŞAMA 1'de Pulldown yükünü daha ağır say.
-        if (t.category == TestCategory.PULLDOWN) {
-          w *= 3;
-        }
+        // Pulldown için ekstra ağırlık kullanılmıyor.
         demandTotal.merge(t.env, w, Long::sum);
         if (p.needsVoltage) demandVolt.merge(t.env, w, Long::sum);
         demandedEnvs.add(t.env);
