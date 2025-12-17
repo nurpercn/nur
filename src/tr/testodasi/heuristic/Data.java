@@ -8,8 +8,8 @@ import java.util.Map;
 /**
  * Tüm veriler kodun içindedir.
  *
- * Not: Proje matriksi ekranda görünen desene göre programatik üretilmiştir.
- * İsterseniz {@link #buildProjects(int)} metodunu kendi 50 satırlık gerçek verinizle birebir değiştirebilirsiniz.
+ * Not: Proje matriksi Excel'deki gibi 0/1 tablo olarak aşağıda tutulur.
+ * Yeni instance denemek için sadece {@link #PROJECT_MATRIX}, {@link #NEEDS_VOLT}, {@link #DUE_DATES} dizilerini değiştirmeniz yeterli.
  */
 public final class Data {
   private Data() {}
@@ -23,7 +23,7 @@ public final class Data {
   public static final boolean OTHER_TESTS_WAIT_FOR_ALL_PULLDOWNS = true;
 
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
-  public static final int DUE_DATE_OFFSET_DAYS = 30;
+  public static final int DUE_DATE_OFFSET_DAYS = 0;
 
   // Test sırasi: ekrandaki kolon sırasını takip eder.
   public static final List<TestDef> TESTS = List.of(
@@ -46,6 +46,75 @@ public final class Data {
   );
 
   public static final Map<String, Integer> TEST_INDEX = indexById(TESTS);
+
+  /**
+   * Excel kolon sırası ile birebir (PROJECT_MATRIX sütunları).
+   * Bu sıra {@link #TESTS} sırası ile aynı olmak zorunda.
+   */
+  public static final String[] MATRIX_COLUMNS = new String[] {
+      "GasAmount",
+      "Pulldown",
+      "EE_32",
+      "EE_25",
+      "EE_16",
+      "Perf_25",
+      "Perf_43",
+      "Perf_38",
+      "Perf_32",
+      "Perf_16",
+      "Perf_10",
+      "FreezingC",
+      "TemperatureRise",
+      "CU_10",
+      "CU_25",
+      "CU_32"
+  };
+
+  /**
+   * Proje test matrisi: satır = proje, sütun = {@link #MATRIX_COLUMNS}.
+   * Değerler 0/1 olmalı.
+   *
+   * Varsayılan: örnek placeholder (50 proje x 16 test).
+   * Burayı Excel'deki tablonuzla birebir değiştirin.
+   */
+  public static final int[][] PROJECT_MATRIX = new int[][]{
+      // Gas,PD, EE32,EE25,EE16, P25,P43,P38,P32,P16,P10, Frz,TR, CU10,CU25,CU32
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P1
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P2
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P3 (placeholder)
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P4 (placeholder)
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P5 (placeholder)
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P6 (placeholder)
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P7 (placeholder)
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P8 (placeholder)
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P9 (placeholder)
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P10 (placeholder)
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P11 (placeholder)
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P12 (placeholder)
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P13 (placeholder)
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P14 (placeholder)
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P15 (placeholder)
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P16 (placeholder)
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P17 (placeholder)
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P18 (placeholder)
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P19 (placeholder)
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P20 (placeholder)
+      // ... P21..P50: burayı Excel'den birebir doldurun ...
+  };
+
+  /** Proje bazlı voltaj ihtiyacı (Excel NeedsVolt kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
+  public static final int[] NEEDS_VOLT = new int[]{
+      1, 1, 0, 0, 1, 1, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      // ... P21..P50
+  };
+
+  /** Proje bazlı due date (Excel due date kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
+  public static final int[] DUE_DATES = new int[]{
+      30, 60, 95, 120, 50, 70, 30, 60, 95, 120,
+      50, 70, 30, 60, 95, 120, 50, 70, 30, 60
+      // ... P21..P50
+  };
 
   public static final List<ChamberSpec> CHAMBERS = List.of(
       // id, stations, tempAdj, humAdj, voltAdj (voltCapable)
@@ -79,60 +148,60 @@ public final class Data {
       new ChamberSpec("T028", 12, true, false, true)
   );
 
-  /** 50 proje: başlangıç sample = 2. */
+  /** Projeleri doğrudan matristen üretir. */
   public static List<Project> buildProjects(int initialSamples) {
     if (initialSamples <= 0) throw new IllegalArgumentException("initialSamples must be positive");
 
-    // Due date deseni (ekrandaki değerler): 30,60,95,120,50,70 tekrar.
-    int[] dueCycle = new int[]{30, 60, 95, 120, 50, 70};
+    validateMatrix();
 
     List<Project> projects = new ArrayList<>();
-    for (int i = 1; i <= 50; i++) {
-      String id = "P" + i;
-      int due = dueCycle[(i - 1) % dueCycle.length] + DUE_DATE_OFFSET_DAYS;
-
-      // Ekran görüntüsündeki görünen desene göre: 2 projede voltaj=1, sonraki 2 projede 0, tekrar.
-      boolean needsVolt = ((i - 1) / 2) % 2 == 0;
+    for (int r = 0; r < PROJECT_MATRIX.length; r++) {
+      String id = "P" + (r + 1);
+      int due = DUE_DATES[r] + DUE_DATE_OFFSET_DAYS;
+      boolean needsVolt = NEEDS_VOLT[r] == 1;
 
       boolean[] req = new boolean[TESTS.size()];
-      // Gas + Pulldown hepsi 1 görünüyor.
-      req[TEST_INDEX.get("GAS_43")] = true;
-      req[TEST_INDEX.get("PULLDOWN_43")] = true;
-
-      // Energy: tek bir varyant seçiliyor (odd->EE32+EE16, even->EE25)
-      if (i % 2 == 1) {
-        req[TEST_INDEX.get("EE_32")] = true;
-        req[TEST_INDEX.get("EE_16")] = true;
-      } else {
-        req[TEST_INDEX.get("EE_25")] = true;
+      for (int c = 0; c < TESTS.size(); c++) {
+        req[c] = PROJECT_MATRIX[r][c] == 1;
       }
-
-      // Performance: PERF_25 her projede 1 görünüyor. Diğerleri sırayla.
-      req[TEST_INDEX.get("PERF_25")] = true;
-      if (i % 2 == 1) {
-        req[TEST_INDEX.get("PERF_43")] = true;
-        req[TEST_INDEX.get("PERF_16")] = true;
-      } else {
-        req[TEST_INDEX.get("PERF_38")] = true;
-        req[TEST_INDEX.get("PERF_10")] = true;
-      }
-      // PERF_32 ekranda hep 0 göründüğü için kapalı bırakıldı.
-
-      // İlk 10 projede Freezing + Temperature Rise = 1 (ekrandaki ilk blok gibi)
-      if (i <= 10) {
-        req[TEST_INDEX.get("FREEZE_25")] = true;
-        req[TEST_INDEX.get("TEMP_RISE_25")] = true;
-      }
-
-      // Consumer Usage kolonlarında ekranda hep 1 göründüğü için hepsi aktif.
-      req[TEST_INDEX.get("CU_10")] = true;
-      req[TEST_INDEX.get("CU_25")] = true;
-      req[TEST_INDEX.get("CU_32")] = true;
-
       projects.add(new Project(id, due, needsVolt, req, initialSamples));
     }
 
     return projects;
+  }
+
+  private static void validateMatrix() {
+    if (MATRIX_COLUMNS.length != TESTS.size()) {
+      throw new IllegalStateException("MATRIX_COLUMNS length must match TESTS size. " +
+          "MATRIX_COLUMNS=" + MATRIX_COLUMNS.length + " TESTS=" + TESTS.size());
+    }
+    if (PROJECT_MATRIX.length == 0) throw new IllegalStateException("PROJECT_MATRIX is empty");
+    if (NEEDS_VOLT.length != PROJECT_MATRIX.length) {
+      throw new IllegalStateException("NEEDS_VOLT length must match PROJECT_MATRIX rows. " +
+          "NEEDS_VOLT=" + NEEDS_VOLT.length + " rows=" + PROJECT_MATRIX.length);
+    }
+    if (DUE_DATES.length != PROJECT_MATRIX.length) {
+      throw new IllegalStateException("DUE_DATES length must match PROJECT_MATRIX rows. " +
+          "DUE_DATES=" + DUE_DATES.length + " rows=" + PROJECT_MATRIX.length);
+    }
+    for (int r = 0; r < PROJECT_MATRIX.length; r++) {
+      if (PROJECT_MATRIX[r].length != TESTS.size()) {
+        throw new IllegalStateException("PROJECT_MATRIX row " + r + " length must be " + TESTS.size() +
+            " but was " + PROJECT_MATRIX[r].length);
+      }
+      if (NEEDS_VOLT[r] != 0 && NEEDS_VOLT[r] != 1) {
+        throw new IllegalStateException("NEEDS_VOLT[" + r + "] must be 0/1");
+      }
+      if (DUE_DATES[r] < 0) {
+        throw new IllegalStateException("DUE_DATES[" + r + "] must be >= 0");
+      }
+      for (int c = 0; c < PROJECT_MATRIX[r].length; c++) {
+        int v = PROJECT_MATRIX[r][c];
+        if (v != 0 && v != 1) {
+          throw new IllegalStateException("PROJECT_MATRIX[" + r + "][" + c + "] must be 0/1");
+        }
+      }
+    }
   }
 
   private static Map<String, Integer> indexById(List<TestDef> tests) {
