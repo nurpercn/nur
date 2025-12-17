@@ -36,6 +36,12 @@ public final class Data {
   /** ATC parametresi (tipik 2..4). */
   public static double ATC_K = 3.0;
 
+  /** EDD sırasını local search (adjacent swap) ile iyileştir. */
+  public static boolean ENABLE_ORDER_LOCAL_SEARCH = true;
+
+  /** Local search maksimum tur sayısı (adjacent swap pass). */
+  public static int ORDER_LS_MAX_PASSES = 2;
+
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
   public static final int DUE_DATE_OFFSET_DAYS = 0;
 

@@ -45,6 +45,20 @@ public final class HeuristicSolver {
       List<Project> improved = stage2_increaseSamples(room, current);
       Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
 
+      // Ek iyileştirme: proje sırasını local search ile iyileştir (EDD tabanlı).
+      if (Data.ENABLE_ORDER_LOCAL_SEARCH && Data.PROJECT_DISPATCH_RULE == Data.ProjectDispatchRule.EDD) {
+        Scheduler.EvalResult lsEval = improveOrderByLocalSearch(improved, room, eval.totalLateness);
+        if (lsEval.totalLateness < eval.totalLateness) {
+          if (verbose) {
+            System.out.println("INFO: Order local-search improved total lateness: " +
+                eval.totalLateness + " -> " + lsEval.totalLateness);
+          }
+          eval = lsEval;
+        } else if (verbose) {
+          System.out.println("INFO: Order local-search no improvement (baseline=" + eval.totalLateness + ")");
+        }
+      }
+
       solutions.add(new Solution(iter, eval.totalLateness, deepCopy(improved), room, eval.projectResults, eval.schedule));
 
       prevRoom = room;
@@ -270,5 +284,39 @@ public final class HeuristicSolver {
     List<Project> out = new ArrayList<>();
     for (Project p : ps) out.add(p.copy());
     return out;
+  }
+
+  private Scheduler.EvalResult improveOrderByLocalSearch(List<Project> projects, Map<String, Env> room, int baseline) {
+    // Başlangıç: EDD sırası
+    List<Project> order = projects.stream().map(Project::copy)
+        .sorted(Comparator.comparingInt(p -> p.dueDateDays))
+        .toList();
+    order = new ArrayList<>(order);
+
+    Scheduler.EvalResult best = scheduler.evaluateFixedOrder(order, room);
+    int passes = Math.max(1, Data.ORDER_LS_MAX_PASSES);
+
+    for (int pass = 0; pass < passes; pass++) {
+      boolean improved = false;
+      for (int i = 0; i < order.size() - 1; i++) {
+        swap(order, i, i + 1);
+        Scheduler.EvalResult cand = scheduler.evaluateFixedOrder(order, room);
+        if (cand.totalLateness < best.totalLateness) {
+          best = cand;
+          improved = true;
+        } else {
+          swap(order, i, i + 1); // geri al
+        }
+      }
+      if (!improved) break;
+    }
+
+    return best.totalLateness < baseline ? best : best; // return best (caller compares)
+  }
+
+  private static void swap(List<Project> list, int i, int j) {
+    Project tmp = list.get(i);
+    list.set(i, list.get(j));
+    list.set(j, tmp);
   }
 }

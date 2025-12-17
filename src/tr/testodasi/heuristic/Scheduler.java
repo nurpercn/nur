@@ -123,16 +123,69 @@ public final class Scheduler {
       chambers.add(new ChamberInstance(spec, env));
     }
 
+    // Varsayılan evaluator: dispatch rule'a göre proje seçimi (EDD/ATC).
     List<Project> remaining = new ArrayList<>(projects.stream().map(Project::copy).toList());
-
     int totalLateness = 0;
     List<ProjectResult> results = new ArrayList<>();
     List<ScheduledJob> schedule = new ArrayList<>();
 
     while (!remaining.isEmpty()) {
       Project p = pickNextProject(remaining, chambers);
-      int[] sampleAvail = new int[p.samples];
-      int projectCompletion = 0;
+      ProjectSchedule ps = scheduleSingleProject(p, chambers);
+      totalLateness += ps.lateness;
+      results.add(new ProjectResult(p.id, ps.completionDay, p.dueDateDays, ps.lateness));
+      schedule.addAll(ps.jobs);
+    }
+
+    return new EvalResult(totalLateness, results, schedule);
+  }
+
+  /** Verilen proje sırasını aynen kullanarak çizelgele. */
+  public EvalResult evaluateFixedOrder(List<Project> orderedProjects, Map<String, Env> chamberEnv) {
+    Objects.requireNonNull(orderedProjects);
+    Objects.requireNonNull(chamberEnv);
+
+    List<ChamberInstance> chambers = new ArrayList<>();
+    for (ChamberSpec spec : Data.CHAMBERS) {
+      Env env = chamberEnv.get(spec.id);
+      if (env == null) throw new IllegalArgumentException("Missing env for chamber " + spec.id);
+      if (env.humidity == Humidity.H85 && !spec.humidityAdjustable) {
+        throw new IllegalArgumentException("Chamber " + spec.id + " cannot be assigned to 85% humidity");
+      }
+      chambers.add(new ChamberInstance(spec, env));
+    }
+
+    int totalLateness = 0;
+    List<ProjectResult> results = new ArrayList<>();
+    List<ScheduledJob> schedule = new ArrayList<>();
+
+    for (Project p0 : orderedProjects) {
+      Project p = p0.copy();
+      ProjectSchedule ps = scheduleSingleProject(p, chambers);
+      totalLateness += ps.lateness;
+      results.add(new ProjectResult(p.id, ps.completionDay, p.dueDateDays, ps.lateness));
+      schedule.addAll(ps.jobs);
+    }
+
+    return new EvalResult(totalLateness, results, schedule);
+  }
+
+  private static final class ProjectSchedule {
+    final int completionDay;
+    final int lateness;
+    final List<ScheduledJob> jobs;
+
+    ProjectSchedule(int completionDay, int lateness, List<ScheduledJob> jobs) {
+      this.completionDay = completionDay;
+      this.lateness = lateness;
+      this.jobs = jobs;
+    }
+  }
+
+  private static ProjectSchedule scheduleSingleProject(Project p, List<ChamberInstance> chambers) {
+    int[] sampleAvail = new int[p.samples];
+    int projectCompletion = 0;
+    List<ScheduledJob> jobs = new ArrayList<>();
 
       // 1) GAS
       int gasEnd = 0;
@@ -141,7 +194,7 @@ public final class Scheduler {
         Assignment a = assignBest(chambers, p.needsVoltage, gas.env, gas.durationDays, 0, 0, sampleAvail);
         gasEnd = a.end;
         projectCompletion = Math.max(projectCompletion, a.end);
-        schedule.add(new ScheduledJob(p.id, gas.id, gas.category, gas.env, gas.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
+        jobs.add(new ScheduledJob(p.id, gas.id, gas.category, gas.env, gas.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
       }
 
       // 2) PULLDOWN: S adet paralel job (sample başına 1)
@@ -154,7 +207,7 @@ public final class Scheduler {
           Assignment a = assignBest(chambers, p.needsVoltage, pd.env, pd.durationDays, earliest, s, sampleAvail);
           maxEnd = Math.max(maxEnd, a.end);
           projectCompletion = Math.max(projectCompletion, a.end);
-          schedule.add(new ScheduledJob(p.id, pd.id, pd.category, pd.env, pd.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
+          jobs.add(new ScheduledJob(p.id, pd.id, pd.category, pd.env, pd.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
         }
         pulldownEnd = maxEnd;
       }
@@ -194,7 +247,7 @@ public final class Scheduler {
         apply(best, sampleAvail);
         maxStartOther = Math.max(maxStartOther, best.start);
         projectCompletion = Math.max(projectCompletion, best.end);
-        schedule.add(new ScheduledJob(
+        jobs.add(new ScheduledJob(
             p.id, chosen.id, chosen.category, chosen.env, chosen.durationDays,
             best.chamber.spec.id, best.stationIdx, best.sampleIdx, best.start, best.end
         ));
@@ -207,15 +260,11 @@ public final class Scheduler {
         int earliest = Math.max(otherPhaseEarliest, maxStartOther);
         Assignment a = assignBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, earliest, sampleAvail);
         projectCompletion = Math.max(projectCompletion, a.end);
-        schedule.add(new ScheduledJob(p.id, t.id, t.category, t.env, t.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
+        jobs.add(new ScheduledJob(p.id, t.id, t.category, t.env, t.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
       }
 
-      int lateness = Math.max(0, projectCompletion - p.dueDateDays);
-      totalLateness += lateness;
-      results.add(new ProjectResult(p.id, projectCompletion, p.dueDateDays, lateness));
-    }
-
-    return new EvalResult(totalLateness, results, schedule);
+    int lateness = Math.max(0, projectCompletion - p.dueDateDays);
+    return new ProjectSchedule(projectCompletion, lateness, jobs);
   }
 
   private static Project pickNextProject(List<Project> remaining, List<ChamberInstance> chambers) {

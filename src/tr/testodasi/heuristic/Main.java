@@ -44,6 +44,17 @@ public final class Main {
           // ignore invalid
         }
       }
+      if (a != null && a.startsWith("--orderLS=")) {
+        String v = a.substring("--orderLS=".length()).trim();
+        Data.ENABLE_ORDER_LOCAL_SEARCH = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+      }
+      if (a != null && a.startsWith("--orderLSPasses=")) {
+        try {
+          Data.ORDER_LS_MAX_PASSES = Integer.parseInt(a.substring("--orderLSPasses=".length()).trim());
+        } catch (NumberFormatException ignored) {
+          // ignore invalid
+        }
+      }
     }
     HeuristicSolver solver = new HeuristicSolver(verbose);
     List<Solution> sols = solver.solve();
