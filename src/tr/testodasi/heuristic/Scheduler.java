@@ -93,6 +93,22 @@ public final class Scheduler {
     }
   }
 
+  private static final class Planned {
+    final ChamberInstance chamber;
+    final int stationIdx;
+    final int sampleIdx;
+    final int start;
+    final int end;
+
+    Planned(ChamberInstance chamber, int stationIdx, int sampleIdx, int start, int end) {
+      this.chamber = chamber;
+      this.stationIdx = stationIdx;
+      this.sampleIdx = sampleIdx;
+      this.start = start;
+      this.end = end;
+    }
+  }
+
   public EvalResult evaluate(List<Project> projects, Map<String, Env> chamberEnv) {
     Objects.requireNonNull(projects);
     Objects.requireNonNull(chamberEnv);
@@ -149,19 +165,40 @@ public final class Scheduler {
       for (TestDef t : Data.TESTS) {
         if (t.category == TestCategory.OTHER && isRequired(p, t.id)) others.add(t);
       }
-      others.sort(Comparator.comparingInt((TestDef t) -> t.durationDays).reversed());
 
       // Other testlerin faz başlangıcı: iki farklı yorum desteklenir.
       // - WAIT_FOR_ALL_PULLDOWNS=true: tüm pulldown bitmeden other test başlamaz.
       // - false: her sample kendi pulldown'u biter bitmez other test alabilir (sampleAvail bunu zaten zorlar).
       int otherPhaseEarliest = Data.OTHER_TESTS_WAIT_FOR_ALL_PULLDOWNS ? pulldownEnd : gasEnd;
 
+      // List scheduling: her adımda (kalan testler içinden) en erken başlayabileni seç.
       int maxStartOther = otherPhaseEarliest;
-      for (TestDef t : others) {
-        Assignment a = assignBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, otherPhaseEarliest, sampleAvail);
-        maxStartOther = Math.max(maxStartOther, a.start);
-        projectCompletion = Math.max(projectCompletion, a.end);
-        schedule.add(new ScheduledJob(p.id, t.id, t.category, t.env, t.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
+      List<TestDef> remaining = new ArrayList<>(others);
+      while (!remaining.isEmpty()) {
+        Planned best = null;
+        int bestIdx = -1;
+        for (int i = 0; i < remaining.size(); i++) {
+          TestDef t = remaining.get(i);
+          Planned cand = planBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, otherPhaseEarliest, sampleAvail);
+          if (best == null
+              || cand.start < best.start
+              || (cand.start == best.start && cand.end < best.end)) {
+            best = cand;
+            bestIdx = i;
+          }
+        }
+        if (best == null || bestIdx < 0) {
+          throw new IllegalStateException("Failed to plan other test assignment for project " + p.id);
+        }
+
+        TestDef chosen = remaining.remove(bestIdx);
+        apply(best, sampleAvail);
+        maxStartOther = Math.max(maxStartOther, best.start);
+        projectCompletion = Math.max(projectCompletion, best.end);
+        schedule.add(new ScheduledJob(
+            p.id, chosen.id, chosen.category, chosen.env, chosen.durationDays,
+            best.chamber.spec.id, best.stationIdx, best.sampleIdx, best.start, best.end
+        ));
       }
 
       // 4) CONSUMER USAGE: start >= maxStartOther
@@ -253,5 +290,62 @@ public final class Scheduler {
     sampleAvail[sampleIdx] = end;
 
     return new Assignment(bestCh, bestStation, sampleIdx, start, end);
+  }
+
+  private static Planned planBestOverSamples(
+      List<ChamberInstance> chambers,
+      boolean needsVoltage,
+      Env env,
+      int duration,
+      int earliest,
+      int[] sampleAvail
+  ) {
+    Planned best = null;
+    for (int s = 0; s < sampleAvail.length; s++) {
+      int e = Math.max(earliest, sampleAvail[s]);
+      Planned cand = planBestSingleSample(chambers, needsVoltage, env, duration, e, s);
+      if (cand == null) continue;
+      if (best == null || cand.start < best.start || (cand.start == best.start && cand.end < best.end)) {
+        best = cand;
+      }
+    }
+    if (best == null) {
+      throw new IllegalStateException("No eligible chamber for env=" + env + " needsVoltage=" + needsVoltage);
+    }
+    return best;
+  }
+
+  private static Planned planBestSingleSample(
+      List<ChamberInstance> chambers,
+      boolean needsVoltage,
+      Env env,
+      int duration,
+      int earliest,
+      int sampleIdx
+  ) {
+    ChamberInstance bestCh = null;
+    int bestStation = -1;
+    int bestStart = Integer.MAX_VALUE;
+    for (ChamberInstance ch : chambers) {
+      if (!ch.env.equals(env)) continue;
+      if (needsVoltage && !ch.spec.voltageCapable) continue;
+      for (int i = 0; i < ch.stationAvail.length; i++) {
+        int st = Math.max(ch.stationAvail[i], earliest);
+        if (st < bestStart) {
+          bestStart = st;
+          bestCh = ch;
+          bestStation = i;
+        }
+      }
+    }
+    if (bestCh == null) return null;
+    int start = bestStart;
+    int end = start + duration;
+    return new Planned(bestCh, bestStation, sampleIdx, start, end);
+  }
+
+  private static void apply(Planned p, int[] sampleAvail) {
+    p.chamber.stationAvail[p.stationIdx] = p.end;
+    sampleAvail[p.sampleIdx] = p.end;
   }
 }
