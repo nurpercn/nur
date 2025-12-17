@@ -6,7 +6,8 @@ import java.util.Map;
 
 public final class Main {
   public static void main(String[] args) {
-    HeuristicSolver solver = new HeuristicSolver();
+    // verbose=true => sample artırma adımlarını da yazdırır
+    HeuristicSolver solver = new HeuristicSolver(true);
     List<Solution> sols = solver.solve();
 
     Solution best = sols.stream().min(Comparator.comparingInt(s -> s.totalLateness)).orElseThrow();

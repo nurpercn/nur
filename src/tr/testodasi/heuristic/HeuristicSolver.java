@@ -12,6 +12,15 @@ import java.util.Set;
 
 public final class HeuristicSolver {
   private final Scheduler scheduler = new Scheduler();
+  private final boolean verbose;
+
+  public HeuristicSolver() {
+    this(false);
+  }
+
+  public HeuristicSolver(boolean verbose) {
+    this.verbose = verbose;
+  }
 
   public List<Solution> solve() {
     List<Project> projects = Data.buildProjects(2);
@@ -24,21 +33,22 @@ public final class HeuristicSolver {
     for (int iter = 1; iter <= 5; iter++) {
       Map<String, Env> room = stage1_assignRooms(current);
 
+      // Eğer oda setleri artık değişmiyorsa sabit noktaya geldik: tekrar üretmek yerine dur.
+      if (prevRoom != null && prevRoom.equals(room)) {
+        if (verbose) {
+          System.out.println("INFO: Stage3 converged (room set unchanged). Stopping at iter=" + (iter - 1));
+        }
+        break;
+      }
+
       // Stage2: EDD scheduling + sample artırma
       List<Project> improved = stage2_increaseSamples(room, current);
       Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
 
       solutions.add(new Solution(iter, eval.totalLateness, deepCopy(improved), room, eval.projectResults));
 
-      boolean roomChanged = prevRoom == null || !prevRoom.equals(room);
       prevRoom = room;
       current = deepCopy(improved);
-
-      // Stage3: oda setleri değişmiyorsa ve sample artışı artık iyileştirmiyorsa erken çık.
-      if (!roomChanged) {
-        // Bir daha iterasyon yapmanın faydası kalmadıysa (oda sabit), çık.
-        break;
-      }
     }
 
     return solutions;
@@ -48,6 +58,9 @@ public final class HeuristicSolver {
     List<Project> current = deepCopy(startProjects);
 
     Scheduler.EvalResult baseEval = scheduler.evaluate(current, room);
+    if (verbose) {
+      System.out.println("INFO: Stage2 initial total lateness = " + baseEval.totalLateness);
+    }
 
     while (true) {
       int bestImprovement = 0;
@@ -68,10 +81,22 @@ public final class HeuristicSolver {
       }
 
       if (bestImprovement <= 0 || bestProjectIdx < 0 || bestEval == null) {
+        if (verbose) {
+          System.out.println("INFO: Stage2 no further improvement. Final total lateness = " + baseEval.totalLateness);
+        }
         break;
       }
 
       current.get(bestProjectIdx).samples += 1;
+      if (verbose) {
+        Project p = current.get(bestProjectIdx);
+        System.out.println(
+            "INFO: Stage2 accept +1 sample => " + p.id +
+                " samples=" + p.samples +
+                " improvement=" + bestImprovement +
+                " newTotal=" + bestEval.totalLateness
+        );
+      }
       baseEval = bestEval;
     }
 
