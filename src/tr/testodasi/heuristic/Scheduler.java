@@ -109,9 +109,14 @@ public final class Scheduler {
       }
       others.sort(Comparator.comparingInt((TestDef t) -> t.durationDays).reversed());
 
-      int maxStartOther = pulldownEnd;
+      // Other testlerin faz başlangıcı: iki farklı yorum desteklenir.
+      // - WAIT_FOR_ALL_PULLDOWNS=true: tüm pulldown bitmeden other test başlamaz.
+      // - false: her sample kendi pulldown'u biter bitmez other test alabilir (sampleAvail bunu zaten zorlar).
+      int otherPhaseEarliest = Data.OTHER_TESTS_WAIT_FOR_ALL_PULLDOWNS ? pulldownEnd : gasEnd;
+
+      int maxStartOther = otherPhaseEarliest;
       for (TestDef t : others) {
-        Assignment a = assignBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, pulldownEnd, sampleAvail);
+        Assignment a = assignBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, otherPhaseEarliest, sampleAvail);
         maxStartOther = Math.max(maxStartOther, a.start);
         projectCompletion = Math.max(projectCompletion, a.end);
       }
@@ -120,7 +125,7 @@ public final class Scheduler {
       for (TestDef t : Data.TESTS) {
         if (t.category != TestCategory.CONSUMER_USAGE) continue;
         if (!isRequired(p, t.id)) continue;
-        int earliest = Math.max(pulldownEnd, maxStartOther);
+        int earliest = Math.max(otherPhaseEarliest, maxStartOther);
         Assignment a = assignBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, earliest, sampleAvail);
         projectCompletion = Math.max(projectCompletion, a.end);
       }

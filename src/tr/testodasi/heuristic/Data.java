@@ -14,6 +14,14 @@ import java.util.Map;
 public final class Data {
   private Data() {}
 
+  /**
+   * Pulldown sonrası \"Other Tests\" başlangıç kuralı.
+   *
+   * - true  => Projedeki TÜM pulldown job'ları bitmeden hiçbir other test başlamaz (metindeki ifade: \"Pulldown tamamlanmadan...\").
+   * - false => Sadece ilgili sample'ın pulldown'u bittiyse o sample üzerinde other test başlayabilir (manuel hesaplarda sık görülen yorum).
+   */
+  public static final boolean OTHER_TESTS_WAIT_FOR_ALL_PULLDOWNS = true;
+
   // Test sırasi: ekrandaki kolon sırasını takip eder.
   public static final List<TestDef> TESTS = List.of(
       new TestDef("GAS_43", "Gas Amount Determination", new Env(43, Humidity.NORMAL), 10, TestCategory.GAS),
