@@ -32,6 +32,18 @@ public final class Main {
       if (a != null && a.startsWith("--csvDir=")) {
         csvDir = a.substring("--csvDir=".length()).trim();
       }
+      if (a != null && a.startsWith("--dispatch=")) {
+        String v = a.substring("--dispatch=".length()).trim().toUpperCase();
+        if ("EDD".equals(v)) Data.PROJECT_DISPATCH_RULE = Data.ProjectDispatchRule.EDD;
+        if ("ATC".equals(v)) Data.PROJECT_DISPATCH_RULE = Data.ProjectDispatchRule.ATC;
+      }
+      if (a != null && a.startsWith("--atcK=")) {
+        try {
+          Data.ATC_K = Double.parseDouble(a.substring("--atcK=".length()).trim());
+        } catch (NumberFormatException ignored) {
+          // ignore invalid
+        }
+      }
     }
     HeuristicSolver solver = new HeuristicSolver(verbose);
     List<Solution> sols = solver.solve();

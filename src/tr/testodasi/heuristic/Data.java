@@ -30,10 +30,11 @@ public final class Data {
   public static final boolean OTHER_TESTS_WAIT_FOR_ALL_PULLDOWNS = true;
 
   /** Stage2 proje çizelgeleme sıralama kuralı. */
-  public static final ProjectDispatchRule PROJECT_DISPATCH_RULE = ProjectDispatchRule.ATC;
+  /** Varsayılan: EDD. Denemeler için Main argümanıyla değiştirilebilir. */
+  public static ProjectDispatchRule PROJECT_DISPATCH_RULE = ProjectDispatchRule.EDD;
 
   /** ATC parametresi (tipik 2..4). */
-  public static final double ATC_K = 3.0;
+  public static double ATC_K = 3.0;
 
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
   public static final int DUE_DATE_OFFSET_DAYS = 0;

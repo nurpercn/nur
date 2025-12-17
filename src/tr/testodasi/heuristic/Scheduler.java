@@ -237,7 +237,6 @@ public final class Scheduler {
     }
 
     // ATC (Apparent Tardiness Cost) - dinamik: t, p, p_bar ile skorla.
-    int t = globalEarliestTime(chambers);
     double pBar = averageWork(remaining);
     double k = Data.ATC_K <= 0 ? 3.0 : Data.ATC_K;
 
@@ -246,6 +245,7 @@ public final class Scheduler {
     int bestDue = Integer.MAX_VALUE;
     for (int i = 0; i < remaining.size(); i++) {
       Project p = remaining.get(i);
+      int t = earliestProjectStart(p, chambers);
       double proc = Math.max(1.0, estimatedWork(p));
       double slack = p.dueDateDays - t - proc;
       double urgency = Math.max(0.0, -slack); // tardy/near-tardy -> larger
@@ -263,9 +263,27 @@ public final class Scheduler {
     return remaining.remove(bestIdx);
   }
 
-  private static int globalEarliestTime(List<ChamberInstance> chambers) {
+  /** Projenin ilk başlayabileceği tahmini en erken zaman (ATC için). */
+  private static int earliestProjectStart(Project p, List<ChamberInstance> chambers) {
+    // İlk test env: Gas varsa Gas env, yoksa Pulldown env, yoksa herhangi bir required test env.
+    Env firstEnv = null;
+    Integer gasIdx = Data.TEST_INDEX.get("GAS_43");
+    if (gasIdx != null && p.required[gasIdx]) firstEnv = Data.TESTS.get(gasIdx).env;
+    if (firstEnv == null) {
+      Integer pdIdx = Data.TEST_INDEX.get("PULLDOWN_43");
+      if (pdIdx != null && p.required[pdIdx]) firstEnv = Data.TESTS.get(pdIdx).env;
+    }
+    if (firstEnv == null) {
+      for (int ti = 0; ti < Data.TESTS.size(); ti++) {
+        if (p.required[ti]) { firstEnv = Data.TESTS.get(ti).env; break; }
+      }
+    }
+    if (firstEnv == null) return 0;
+
     int best = Integer.MAX_VALUE;
     for (ChamberInstance ch : chambers) {
+      if (!ch.env.equals(firstEnv)) continue;
+      if (p.needsVoltage && !ch.spec.voltageCapable) continue;
       for (int a : ch.stationAvail) {
         if (a < best) best = a;
       }
