@@ -22,6 +22,9 @@ public final class Data {
    */
   public static final boolean OTHER_TESTS_WAIT_FOR_ALL_PULLDOWNS = true;
 
+  /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
+  public static final int DUE_DATE_OFFSET_DAYS = 30;
+
   // Test sırasi: ekrandaki kolon sırasını takip eder.
   public static final List<TestDef> TESTS = List.of(
       new TestDef("GAS_43", "Gas Amount Determination", new Env(43, Humidity.NORMAL), 10, TestCategory.GAS),
@@ -86,7 +89,7 @@ public final class Data {
     List<Project> projects = new ArrayList<>();
     for (int i = 1; i <= 50; i++) {
       String id = "P" + i;
-      int due = dueCycle[(i - 1) % dueCycle.length];
+      int due = dueCycle[(i - 1) % dueCycle.length] + DUE_DATE_OFFSET_DAYS;
 
       // Ekran görüntüsündeki görünen desene göre: 2 projede voltaj=1, sonraki 2 projede 0, tekrar.
       boolean needsVolt = ((i - 1) / 2) % 2 == 0;
