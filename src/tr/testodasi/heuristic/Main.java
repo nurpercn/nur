@@ -19,7 +19,9 @@ public final class Main {
     String dumpProjectId = null;
     boolean dumpFirst10 = false;
     String csvDir = null;
-    for (String a : args) {
+    boolean csvFlag = false;
+    for (int idx = 0; idx < args.length; idx++) {
+      String a = args[idx];
       if ("--verbose".equalsIgnoreCase(a) || "-v".equalsIgnoreCase(a)) {
         verbose = true;
       }
@@ -29,8 +31,21 @@ public final class Main {
       if ("--dumpFirst10".equalsIgnoreCase(a)) {
         dumpFirst10 = true;
       }
-      if (a != null && a.startsWith("--csvDir=")) {
-        csvDir = a.substring("--csvDir=".length()).trim();
+      // CSV arg parsing (case-insensitive, supports both --csvDir=path and --csvDir path)
+      if (a != null && startsWithIgnoreCase(a, "--csvdir=")) {
+        csvDir = a.substring("--csvdir=".length()).trim();
+      } else if (a != null && startsWithIgnoreCase(a, "--csv=")) {
+        csvDir = a.substring("--csv=".length()).trim();
+      } else if ("--csv".equalsIgnoreCase(a)) {
+        csvFlag = true;
+      } else if ("--csvDir".equalsIgnoreCase(a) || "--csvdir".equalsIgnoreCase(a)) {
+        // next token is dir if present
+        if (idx + 1 < args.length) {
+          csvDir = args[idx + 1].trim();
+          idx++;
+        } else {
+          csvFlag = true;
+        }
       }
       if (a != null && a.startsWith("--dispatch=")) {
         String v = a.substring("--dispatch=".length()).trim().toUpperCase();
@@ -95,13 +110,16 @@ public final class Main {
 
     // CSV export (best solution schedule)
     // Kullanım: --csvDir=output (klasör yoksa oluşturulur)
-    if (csvDir != null && !csvDir.isBlank()) {
+    // Alternatif: --csv (varsayılan ./csv_out)
+    if ((csvDir != null && !csvDir.isBlank()) || csvFlag) {
+      if (csvDir == null || csvDir.isBlank()) csvDir = "csv_out";
       try {
-        exportCsv(best, Paths.get(csvDir));
+        int rows = exportCsv(best, Paths.get(csvDir));
         System.out.println();
         System.out.println("CSV exported to: " + Paths.get(csvDir).toAbsolutePath());
         System.out.println("- schedule_by_project.csv");
         System.out.println("- schedule_by_station.csv");
+        System.out.println("Rows written: " + rows);
       } catch (IOException e) {
         throw new RuntimeException("Failed to export CSV to dir=" + csvDir, e);
       }
@@ -193,7 +211,7 @@ public final class Main {
     }
   }
 
-  private static void exportCsv(Solution sol, Path dir) throws IOException {
+  private static int exportCsv(Solution sol, Path dir) throws IOException {
     Objects.requireNonNull(sol);
     Objects.requireNonNull(dir);
     Files.createDirectories(dir);
@@ -228,6 +246,8 @@ public final class Main {
               .thenComparing(j -> j.testId))
           .forEach(j -> writeRowStation(w, sol.iteration, j, projectById.get(j.projectId)));
     }
+
+    return sol.schedule.size();
   }
 
   private static void writeRow(BufferedWriter w, int iteration, Scheduler.ScheduledJob j, Project p) {
@@ -253,5 +273,11 @@ public final class Main {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  private static boolean startsWithIgnoreCase(String s, String prefix) {
+    if (s == null || prefix == null) return false;
+    if (s.length() < prefix.length()) return false;
+    return s.regionMatches(true, 0, prefix, 0, prefix.length());
   }
 }
