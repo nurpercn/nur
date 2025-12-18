@@ -29,6 +29,90 @@ import java.util.stream.Collectors;
  * - output/project_lateness.csv
  */
 public class Main {
+  // --------------------------- PROJECT INPUTS (Excel) ---------------------------
+
+  /**
+   * Proje test matrisi (Excel).
+   * Kolon sırası:
+   * Gas,PD, EE32,EE25,EE16, P25,P43,P38,P32,P16,P10, Frz,TR, CU10,CU25,CU32
+   */
+  public static final int[][] PROJECT_MATRIX = new int[][]{
+      // Gas,PD, EE32,EE25,EE16, P25,P43,P38,P32,P16,P10, Frz,TR, CU10,CU25,CU32
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P1
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P2
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P3
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P4
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P5
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P6
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P7
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P8
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1}, // P9
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1}, // P10
+
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P11
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P12
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P13
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P14
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P15
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P16
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P17
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P18
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P19
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P20
+
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P21
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P22
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P23
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P24
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P25
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P26
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P27
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P28
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P29
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P30
+
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P31
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P32
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P33
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P34
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P35
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P36
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P37
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P38
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P39
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P40
+
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P41
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P42
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P43
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P44
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P45
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P46
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P47
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P48
+      {1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}, // P49
+      {1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1}, // P50
+  };
+
+  /** Proje bazlı voltaj ihtiyacı (Excel NeedsVolt kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
+  public static final int[] NEEDS_VOLT = new int[]{
+      1, 1, 0, 0, 1, 1, 0, 0, 1, 1,
+      0, 0, 1, 1, 0, 0, 1, 1, 0, 0,
+      1, 1, 0, 0, 1, 1, 0, 0, 1, 1,
+      0, 0, 1, 1, 0, 0, 1, 1, 0, 0,
+      1, 1, 0, 0, 1, 1, 0, 0, 1, 0
+  };
+
+  /** Proje bazlı due date (Excel due date kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
+  public static final int[] DUE_DATES = new int[]{
+      140, 160, 120, 150, 185, 210, 140, 160,
+      120, 150, 80, 100, 60, 90, 125, 150, 80,
+      100, 60, 90, 125, 150, 80, 100, 60, 90,
+      125, 150, 80, 100, 60, 90, 125, 150, 80,
+      100, 90, 125, 150, 80, 100, 60, 90, 125,
+      150, 80, 100, 60, 90, 125
+  };
+
   public static void main(String[] args) throws Exception {
     Locale.setDefault(Locale.ROOT);
 
@@ -193,48 +277,54 @@ public class Main {
       chambers.add(new Chamber("T027", 12, true, false, true));
       chambers.add(new Chamber("T028", 12, true, false, true));
 
-      // --- PROJECT TEST MATRİSİ (görselden okunarak) ---
-      // Not: Görselde CU sütunları ayrı ayrı verildiği için burada 3 CU testini de 1 kabul ettik.
-      // Eğer sizde projeye göre CU sadece tek koşul ise (ör. yalnız CU_10_N), bu map’leri kolayca güncelleyebilirsiniz.
+      // --- PROJECT TEST MATRİSİ (Excel) ---
       var projects = new ArrayList<Project>();
-      int[] dueCycle = {30, 60, 95, 120, 50, 70};
-      boolean[] voltCycle = {true, true, false, false};
 
-      for (int i = 1; i <= 50; i++) {
-        String pid = "P" + i;
-        int due = dueCycle[(i - 1) % dueCycle.length];
-        boolean needsV = voltCycle[(i - 1) % voltCycle.length];
+      if (PROJECT_MATRIX.length != NEEDS_VOLT.length || PROJECT_MATRIX.length != DUE_DATES.length) {
+        throw new IllegalStateException("PROJECT_MATRIX / NEEDS_VOLT / DUE_DATES length mismatch. "
+            + "matrix=" + PROJECT_MATRIX.length
+            + " needsVolt=" + NEEDS_VOLT.length
+            + " dueDates=" + DUE_DATES.length);
+      }
 
-        // İki pattern (görseldeki tekrar eden yapı):
-        boolean patternA = (i % 2 == 1);
+      final String[] columns = new String[]{
+          "GAS_43_N",  // Gas
+          "PD_43_N",   // PD
+          "EE_32_N",   // EE32
+          "EE_25_N",   // EE25
+          "EE_16_N",   // EE16
+          "PERF_25_N", // P25
+          "PERF_43_N", // P43
+          "PERF_38_N", // P38
+          "PERF_32_N", // P32
+          "PERF_16_N", // P16
+          "PERF_10_N", // P10
+          "FRZ_25_N",  // Frz
+          "TR_25_N",   // TR
+          "CU_10_N",   // CU10
+          "CU_25_85",  // CU25
+          "CU_32_85"   // CU32
+      };
+
+      for (int i = 0; i < PROJECT_MATRIX.length; i++) {
+        String pid = "P" + (i + 1);
+        int[] row = PROJECT_MATRIX[i];
+        if (row.length != columns.length) {
+          throw new IllegalStateException("PROJECT_MATRIX row " + (i + 1) + " has " + row.length
+              + " columns, expected " + columns.length);
+        }
 
         var req = new LinkedHashMap<String, Integer>();
-        req.put("GAS_43_N", 1);
-        req.put("PD_43_N", 1);
+        for (int c = 0; c < columns.length; c++) {
+          int v = row[c];
+          if (v != 0 && v != 1) {
+            throw new IllegalStateException("PROJECT_MATRIX[" + (i + 1) + "][" + c + "] must be 0/1, got " + v);
+          }
+          req.put(columns[c], v);
+        }
 
-        // Energy
-        req.put("EE_32_N", patternA ? 1 : 0);
-        req.put("EE_25_N", patternA ? 0 : 1);
-        req.put("EE_16_N", patternA ? 1 : 0);
-
-        // Performance (PERF_25 her satırda 1 gibi görünüyor)
-        req.put("PERF_25_N", 1);
-        req.put("PERF_43_N", patternA ? 1 : 0);
-        req.put("PERF_38_N", patternA ? 0 : 1);
-        req.put("PERF_32_N", 0);
-        req.put("PERF_16_N", patternA ? 1 : 0);
-        req.put("PERF_10_N", patternA ? 0 : 1);
-
-        // Freezing + Temperature Rise (görselde P1..P10 için 1, sonrası 0 gibi)
-        boolean firstTen = i <= 10;
-        req.put("FRZ_25_N", firstTen ? 1 : 0);
-        req.put("TR_25_N", firstTen ? 1 : 0);
-
-        // Consumer Usage (3 varyant)
-        req.put("CU_10_N", 1);
-        req.put("CU_25_85", 1);
-        req.put("CU_32_85", 1);
-
+        int due = DUE_DATES[i];
+        boolean needsV = NEEDS_VOLT[i] == 1;
         projects.add(new Project(pid, due, needsV, req));
       }
 
