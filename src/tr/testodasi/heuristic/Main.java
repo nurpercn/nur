@@ -7,9 +7,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -255,6 +257,46 @@ public final class Main {
           .forEach(j -> writeRowStation(w, sol.iteration, j, projectById.get(j.projectId)));
     }
 
+    // 3) Utilization by station
+    Path utilByStation = dir.resolve("utilization_by_station.csv");
+    UtilizationSummary util = computeUtilization(sol);
+    try (BufferedWriter w = Files.newBufferedWriter(utilByStation)) {
+      w.write("iteration,horizonDays,chamberId,stationIdx,busyDays,utilization");
+      w.newLine();
+      util.byStation.entrySet().stream()
+          .sorted((a, b) -> Double.compare(b.getValue().utilization, a.getValue().utilization))
+          .forEach(e -> {
+            StationKey k = e.getKey();
+            StationUtil u = e.getValue();
+            try {
+              w.write(sol.iteration + "," + util.horizonDays + "," + k.chamberId + "," + k.stationIdx + "," +
+                  u.busyDays + "," + fmt(u.utilization));
+              w.newLine();
+            } catch (IOException ex) {
+              throw new RuntimeException(ex);
+            }
+          });
+    }
+
+    // 4) Utilization by chamber
+    Path utilByChamber = dir.resolve("utilization_by_chamber.csv");
+    try (BufferedWriter w = Files.newBufferedWriter(utilByChamber)) {
+      w.write("iteration,horizonDays,chamberId,stations,busyDaysTotal,capacityDays,utilization");
+      w.newLine();
+      util.byChamber.entrySet().stream()
+          .sorted((a, b) -> Double.compare(b.getValue().utilization, a.getValue().utilization))
+          .forEach(e -> {
+            ChamberUtil u = e.getValue();
+            try {
+              w.write(sol.iteration + "," + util.horizonDays + "," + u.chamberId + "," + u.stations + "," +
+                  u.busyDaysTotal + "," + u.capacityDays + "," + fmt(u.utilization));
+              w.newLine();
+            } catch (IOException ex) {
+              throw new RuntimeException(ex);
+            }
+          });
+    }
+
     return sol.schedule.size();
   }
 
@@ -351,5 +393,149 @@ public final class Main {
     System.out.println("\nLower-bound check (even with infinite stations & samples):");
     System.out.println("- Projects with dueDate < (gas + pulldown + max(other/cu duration)) : " + impossible + " / " + best.projects.size());
     System.out.println("  (If this count > 0, some lateness is mathematically unavoidable.)");
+
+    // 4) Utilization report
+    UtilizationSummary util = computeUtilization(best);
+    System.out.println("\nUtilization summary (based on produced schedule):");
+    System.out.println("- Horizon (max end) = " + util.horizonDays + " days");
+    System.out.println("- Avg station utilization = " + fmt(util.avgStationUtilization));
+    System.out.println("- Max station utilization = " + fmt(util.maxStationUtilization));
+    System.out.println("- Avg chamber utilization = " + fmt(util.avgChamberUtilization));
+
+    System.out.println("\nTop 10 busiest stations:");
+    util.byStation.entrySet().stream()
+        .sorted((a, b) -> Double.compare(b.getValue().utilization, a.getValue().utilization))
+        .limit(10)
+        .forEach(e -> {
+          StationKey k = e.getKey();
+          StationUtil u = e.getValue();
+          System.out.println("- " + k.chamberId + "[st" + k.stationIdx + "] busyDays=" + u.busyDays + " util=" + fmt(u.utilization));
+        });
+  }
+
+  private static String fmt(double x) {
+    return String.format(Locale.ROOT, "%.4f", x);
+  }
+
+  private static final class StationKey {
+    final String chamberId;
+    final int stationIdx;
+
+    StationKey(String chamberId, int stationIdx) {
+      this.chamberId = chamberId;
+      this.stationIdx = stationIdx;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (!(o instanceof StationKey other)) return false;
+      return stationIdx == other.stationIdx && Objects.equals(chamberId, other.chamberId);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(chamberId, stationIdx);
+    }
+  }
+
+  private static final class StationUtil {
+    final long busyDays;
+    final double utilization;
+
+    StationUtil(long busyDays, double utilization) {
+      this.busyDays = busyDays;
+      this.utilization = utilization;
+    }
+  }
+
+  private static final class ChamberUtil {
+    final String chamberId;
+    final int stations;
+    final long busyDaysTotal;
+    final long capacityDays;
+    final double utilization;
+
+    ChamberUtil(String chamberId, int stations, long busyDaysTotal, long capacityDays, double utilization) {
+      this.chamberId = chamberId;
+      this.stations = stations;
+      this.busyDaysTotal = busyDaysTotal;
+      this.capacityDays = capacityDays;
+      this.utilization = utilization;
+    }
+  }
+
+  private static final class UtilizationSummary {
+    final int horizonDays;
+    final Map<StationKey, StationUtil> byStation;
+    final Map<String, ChamberUtil> byChamber;
+    final double avgStationUtilization;
+    final double maxStationUtilization;
+    final double avgChamberUtilization;
+
+    UtilizationSummary(
+        int horizonDays,
+        Map<StationKey, StationUtil> byStation,
+        Map<String, ChamberUtil> byChamber,
+        double avgStationUtilization,
+        double maxStationUtilization,
+        double avgChamberUtilization
+    ) {
+      this.horizonDays = horizonDays;
+      this.byStation = byStation;
+      this.byChamber = byChamber;
+      this.avgStationUtilization = avgStationUtilization;
+      this.maxStationUtilization = maxStationUtilization;
+      this.avgChamberUtilization = avgChamberUtilization;
+    }
+  }
+
+  private static UtilizationSummary computeUtilization(Solution sol) {
+    int horizon = 0;
+    for (Scheduler.ScheduledJob j : sol.schedule) {
+      horizon = Math.max(horizon, j.end);
+    }
+    if (horizon <= 0) horizon = 1;
+
+    Map<StationKey, Long> busyByStation = new HashMap<>();
+    for (Scheduler.ScheduledJob j : sol.schedule) {
+      StationKey k = new StationKey(j.chamberId, j.stationIdx);
+      long dur = (long) (j.end - j.start);
+      busyByStation.merge(k, dur, Long::sum);
+    }
+
+    Map<StationKey, StationUtil> stationUtil = new HashMap<>();
+    double sumU = 0.0;
+    double maxU = 0.0;
+    for (Map.Entry<StationKey, Long> e : busyByStation.entrySet()) {
+      double u = e.getValue() / (double) horizon;
+      stationUtil.put(e.getKey(), new StationUtil(e.getValue(), u));
+      sumU += u;
+      maxU = Math.max(maxU, u);
+    }
+    double avgU = stationUtil.isEmpty() ? 0.0 : (sumU / stationUtil.size());
+
+    // Chamber utilization (aggregate station capacity)
+    Map<String, Integer> stationsCount = new HashMap<>();
+    for (ChamberSpec c : Data.CHAMBERS) {
+      stationsCount.put(c.id, c.stations);
+    }
+    Map<String, Long> busyByChamber = new HashMap<>();
+    for (Map.Entry<StationKey, Long> e : busyByStation.entrySet()) {
+      busyByChamber.merge(e.getKey().chamberId, e.getValue(), Long::sum);
+    }
+    Map<String, ChamberUtil> chamberUtil = new HashMap<>();
+    double sumChU = 0.0;
+    for (Map.Entry<String, Long> e : busyByChamber.entrySet()) {
+      String chamberId = e.getKey();
+      int stations = stationsCount.getOrDefault(chamberId, 0);
+      long cap = (long) stations * (long) horizon;
+      double u = cap == 0 ? 0.0 : (e.getValue() / (double) cap);
+      chamberUtil.put(chamberId, new ChamberUtil(chamberId, stations, e.getValue(), cap, u));
+      sumChU += u;
+    }
+    double avgChU = chamberUtil.isEmpty() ? 0.0 : (sumChU / chamberUtil.size());
+
+    return new UtilizationSummary(horizon, stationUtil, chamberUtil, avgU, maxU, avgChU);
   }
 }
