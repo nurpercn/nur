@@ -74,10 +74,10 @@ public final class Data {
   public static int ORDER_LS_MAX_EVALS = 2000;
 
   /** Room env local search: oda setlerini schedule objective ile iyileştir. */
-  public static boolean ENABLE_ROOM_LOCAL_SEARCH = false;
+  public static boolean ENABLE_ROOM_LOCAL_SEARCH = true;
 
   /** Room local search max neighbor evaluations. */
-  public static int ROOM_LS_MAX_EVALS = 150;
+  public static int ROOM_LS_MAX_EVALS = 80;
 
   /** Room local search: swap hamlesini dene. */
   public static boolean ROOM_LS_ENABLE_SWAP = true;
