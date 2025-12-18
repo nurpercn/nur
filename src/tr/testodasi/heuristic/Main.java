@@ -20,6 +20,7 @@ public final class Main {
     boolean dumpFirst10 = false;
     String csvDir = null;
     boolean csvFlag = false;
+    boolean diagnose = false;
     for (int idx = 0; idx < args.length; idx++) {
       String a = args[idx];
       if ("--verbose".equalsIgnoreCase(a) || "-v".equalsIgnoreCase(a)) {
@@ -30,6 +31,9 @@ public final class Main {
       }
       if ("--dumpFirst10".equalsIgnoreCase(a)) {
         dumpFirst10 = true;
+      }
+      if ("--diagnose".equalsIgnoreCase(a) || "--diag".equalsIgnoreCase(a)) {
+        diagnose = true;
       }
       // CSV arg parsing (case-insensitive, supports both --csvDir=path and --csvDir path)
       if (a != null && startsWithIgnoreCase(a, "--csvdir=")) {
@@ -123,6 +127,10 @@ public final class Main {
       } catch (IOException e) {
         throw new RuntimeException("Failed to export CSV to dir=" + csvDir, e);
       }
+    }
+
+    if (diagnose) {
+      printDiagnostics(best);
     }
   }
 
@@ -279,5 +287,69 @@ public final class Main {
     if (s == null || prefix == null) return false;
     if (s.length() < prefix.length()) return false;
     return s.regionMatches(true, 0, prefix, 0, prefix.length());
+  }
+
+  private static void printDiagnostics(Solution best) {
+    System.out.println();
+    System.out.println("====================");
+    System.out.println("DIAGNOSTICS (why lateness can happen with many stations)");
+
+    // 1) Effective stations per env (because chambers are fixed to 1 env)
+    Map<Env, Integer> stationsByEnv = new HashMap<>();
+    for (ChamberSpec c : Data.CHAMBERS) {
+      Env env = best.chamberEnv.get(c.id);
+      if (env == null) continue;
+      stationsByEnv.merge(env, c.stations, Integer::sum);
+    }
+    System.out.println("Effective station capacity by ENV (only stations in matching rooms can run that test):");
+    stationsByEnv.entrySet().stream()
+        .sorted(Map.Entry.<Env, Integer>comparingByValue().reversed())
+        .forEach(e -> System.out.println("- " + e.getKey() + " stations=" + e.getValue()));
+
+    // 2) Demand per env using final sample counts (pulldown jobs = S)
+    Map<String, Project> proj = new HashMap<>();
+    for (Project p : best.projects) proj.put(p.id, p);
+    Map<Env, Long> workByEnv = new HashMap<>();
+    for (Project p : best.projects) {
+      for (int ti = 0; ti < Data.TESTS.size(); ti++) {
+        if (!p.required[ti]) continue;
+        TestDef t = Data.TESTS.get(ti);
+        int jobs = 1;
+        if (t.category == TestCategory.PULLDOWN) jobs = p.samples;
+        workByEnv.merge(t.env, (long) jobs * t.durationDays, Long::sum);
+      }
+    }
+    System.out.println("\nENV workload (jobDays) / station (rough bottleneck indicator):");
+    workByEnv.entrySet().stream()
+        .sorted((a, b) -> {
+          double ra = a.getValue() / (stationsByEnv.getOrDefault(a.getKey(), 1) * 1.0);
+          double rb = b.getValue() / (stationsByEnv.getOrDefault(b.getKey(), 1) * 1.0);
+          return Double.compare(rb, ra);
+        })
+        .forEach(e -> {
+          int cap = stationsByEnv.getOrDefault(e.getKey(), 0);
+          double ratio = cap == 0 ? Double.POSITIVE_INFINITY : (e.getValue() / (double) cap);
+          System.out.println("- " + e.getKey() + " workDays=" + e.getValue() + " stations=" + cap + " workDaysPerStation=" + String.format("%.2f", ratio));
+        });
+
+    // 3) Theoretical lower bound with infinite stations AND infinite samples
+    // LB∞ = gas + pulldownPhase + max(duration of any OTHER/CU test) because all can run in parallel.
+    int impossible = 0;
+    for (Project p : best.projects) {
+      int gas = p.required[Data.TEST_INDEX.get("GAS_43")] ? Data.TESTS.get(Data.TEST_INDEX.get("GAS_43")).durationDays : 0;
+      int pd = p.required[Data.TEST_INDEX.get("PULLDOWN_43")] ? Data.TESTS.get(Data.TEST_INDEX.get("PULLDOWN_43")).durationDays : 0;
+      int maxDur = 0;
+      for (int ti = 0; ti < Data.TESTS.size(); ti++) {
+        if (!p.required[ti]) continue;
+        TestDef t = Data.TESTS.get(ti);
+        if (t.category == TestCategory.GAS || t.category == TestCategory.PULLDOWN) continue;
+        maxDur = Math.max(maxDur, t.durationDays);
+      }
+      int lb = gas + pd + maxDur;
+      if (p.dueDateDays < lb) impossible++;
+    }
+    System.out.println("\nLower-bound check (even with infinite stations & samples):");
+    System.out.println("- Projects with dueDate < (gas + pulldown + max(other/cu duration)) : " + impossible + " / " + best.projects.size());
+    System.out.println("  (If this count > 0, some lateness is mathematically unavoidable.)");
   }
 }
