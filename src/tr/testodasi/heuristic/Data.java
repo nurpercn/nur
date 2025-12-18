@@ -14,11 +14,27 @@ import java.util.Map;
 public final class Data {
   private Data() {}
 
+  public enum SchedulingMode {
+    /** Mevcut: proje seç -> proje içi tüm işleri yerleştir. */
+    PROJECT_BASED,
+    /** Yeni: tüm projelerden hazır job havuzu -> job seç -> yerleştir. */
+    JOB_BASED
+  }
+
   public enum ProjectDispatchRule {
     /** Earliest Due Date (mevcut baseline). */
     EDD,
     /** Apparent Tardiness Cost (dinamik öncelik). */
     ATC
+  }
+
+  public enum JobDispatchRule {
+    /** Proje due date bazlı EDD (job'larda proje due kullanılır). */
+    EDD,
+    /** Job-level ATC (tahmini start time üzerinden). */
+    ATC,
+    /** Minimum slack (due - start - p). */
+    MIN_SLACK
   }
 
   /**
@@ -36,6 +52,15 @@ public final class Data {
   /** ATC parametresi (tipik 2..4). */
   public static double ATC_K = 3.0;
 
+  /** Scheduling mode: PROJECT_BASED veya JOB_BASED. */
+  public static SchedulingMode SCHEDULING_MODE = SchedulingMode.JOB_BASED;
+
+  /** Job-based dispatch kuralı. */
+  public static JobDispatchRule JOB_DISPATCH_RULE = JobDispatchRule.ATC;
+
+  /** Job-based ATC k parametresi. */
+  public static double JOB_ATC_K = 3.0;
+
   /** EDD sırasını local search (adjacent swap) ile iyileştir. */
   public static boolean ENABLE_ORDER_LOCAL_SEARCH = true;
 
@@ -47,6 +72,24 @@ public final class Data {
 
   /** Local search toplam değerlendirme limiti (performans için). */
   public static int ORDER_LS_MAX_EVALS = 2000;
+
+  /** Room env local search: oda setlerini schedule objective ile iyileştir. */
+  public static boolean ENABLE_ROOM_LOCAL_SEARCH = false;
+
+  /** Room local search max neighbor evaluations. */
+  public static int ROOM_LS_MAX_EVALS = 150;
+
+  /** Room local search: swap hamlesini dene. */
+  public static boolean ROOM_LS_ENABLE_SWAP = true;
+
+  /** Room local search: move hamlesini dene (oda env değiştir). */
+  public static boolean ROOM_LS_ENABLE_MOVE = true;
+
+  /** Room LS scoring: sample artırmayı da dahil et (daha pahalı). */
+  public static boolean ROOM_LS_INCLUDE_SAMPLE_HEURISTIC = false;
+
+  /** Schedule doğrulama (ihlal varsa exception). */
+  public static boolean ENABLE_SCHEDULE_VALIDATION = true;
 
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
   public static final int DUE_DATE_OFFSET_DAYS = 0;

@@ -1,0 +1,327 @@
+====================
+ITERATION 1
+Total lateness = 603
+
+Chamber setpoints (fixed for this iteration):
+- T001 stations=8 volt=false humAdj=false => 16C/NORMAL
+- T002 stations=8 volt=true humAdj=true => 25C/85%
+- T003 stations=8 volt=true humAdj=true => 32C/85%
+- T004 stations=8 volt=true humAdj=true => 32C/NORMAL
+- T005 stations=8 volt=true humAdj=true => 38C/NORMAL
+- T006 stations=8 volt=false humAdj=false => 25C/NORMAL
+- T007 stations=8 volt=false humAdj=false => 43C/NORMAL
+- T008 stations=12 volt=true humAdj=false => 43C/NORMAL
+- T009 stations=12 volt=false humAdj=false => 25C/NORMAL
+- T010 stations=12 volt=false humAdj=true => 25C/85%
+- T011 stations=12 volt=false humAdj=true => 32C/85%
+- T012 stations=12 volt=false humAdj=true => 10C/NORMAL
+- T013 stations=12 volt=false humAdj=true => 43C/NORMAL
+- T014 stations=6 volt=false humAdj=true => 32C/85%
+- T015 stations=6 volt=false humAdj=true => 32C/85%
+- T016 stations=6 volt=true humAdj=false => 25C/NORMAL
+- T017 stations=6 volt=true humAdj=false => 10C/NORMAL
+- T018 stations=6 volt=true humAdj=false => 43C/NORMAL
+- T019 stations=6 volt=true humAdj=false => 25C/NORMAL
+- T020 stations=6 volt=true humAdj=false => 10C/NORMAL
+- T021 stations=6 volt=true humAdj=false => 16C/NORMAL
+- T022 stations=6 volt=true humAdj=false => 43C/NORMAL
+- T023 stations=6 volt=true humAdj=false => 32C/NORMAL
+- T024 stations=8 volt=false humAdj=true => 25C/85%
+- T025 stations=8 volt=true humAdj=true => 43C/NORMAL
+- T026 stations=12 volt=true humAdj=false => 25C/NORMAL
+- T027 stations=12 volt=true humAdj=false => 10C/NORMAL
+- T028 stations=12 volt=true humAdj=false => 16C/NORMAL
+
+Project sample counts:
+- P1 samples=3 due=30 needsVolt=true
+- P10 samples=2 due=120 needsVolt=true
+- P11 samples=4 due=50 needsVolt=false
+- P12 samples=3 due=70 needsVolt=false
+- P13 samples=3 due=30 needsVolt=true
+- P14 samples=3 due=60 needsVolt=true
+- P15 samples=2 due=95 needsVolt=false
+- P16 samples=2 due=120 needsVolt=false
+- P17 samples=3 due=50 needsVolt=true
+- P18 samples=2 due=70 needsVolt=true
+- P19 samples=3 due=30 needsVolt=false
+- P2 samples=2 due=60 needsVolt=true
+- P20 samples=3 due=60 needsVolt=false
+- P21 samples=3 due=95 needsVolt=true
+- P22 samples=2 due=120 needsVolt=true
+- P23 samples=3 due=50 needsVolt=false
+- P24 samples=3 due=70 needsVolt=false
+- P25 samples=3 due=30 needsVolt=true
+- P26 samples=3 due=60 needsVolt=true
+- P27 samples=2 due=95 needsVolt=false
+- P28 samples=2 due=120 needsVolt=false
+- P29 samples=2 due=50 needsVolt=true
+- P3 samples=2 due=95 needsVolt=false
+- P30 samples=2 due=70 needsVolt=true
+- P31 samples=3 due=30 needsVolt=false
+- P32 samples=2 due=60 needsVolt=false
+- P33 samples=3 due=95 needsVolt=true
+- P34 samples=2 due=120 needsVolt=true
+- P35 samples=2 due=50 needsVolt=false
+- P36 samples=3 due=70 needsVolt=false
+- P37 samples=3 due=30 needsVolt=true
+- P38 samples=3 due=60 needsVolt=true
+- P39 samples=2 due=95 needsVolt=false
+- P4 samples=2 due=120 needsVolt=false
+- P40 samples=2 due=120 needsVolt=false
+- P41 samples=2 due=50 needsVolt=true
+- P42 samples=2 due=70 needsVolt=true
+- P43 samples=2 due=30 needsVolt=false
+- P44 samples=2 due=60 needsVolt=false
+- P45 samples=2 due=95 needsVolt=true
+- P46 samples=2 due=120 needsVolt=true
+- P47 samples=2 due=50 needsVolt=false
+- P48 samples=3 due=70 needsVolt=false
+- P49 samples=2 due=30 needsVolt=true
+- P5 samples=2 due=50 needsVolt=true
+- P50 samples=2 due=60 needsVolt=false
+- P6 samples=2 due=70 needsVolt=true
+- P7 samples=3 due=30 needsVolt=false
+- P8 samples=4 due=60 needsVolt=false
+- P9 samples=3 due=95 needsVolt=true
+
+Project results:
+- P1 completion=60 due=30 lateness=30
+- P10 completion=115 due=120 lateness=0
+- P11 completion=55 due=50 lateness=5
+- P12 completion=70 due=70 lateness=0
+- P13 completion=55 due=30 lateness=25
+- P14 completion=85 due=60 lateness=25
+- P15 completion=85 due=95 lateness=0
+- P16 completion=95 due=120 lateness=0
+- P17 completion=70 due=50 lateness=20
+- P18 completion=86 due=70 lateness=16
+- P19 completion=55 due=30 lateness=25
+- P2 completion=85 due=60 lateness=25
+- P20 completion=60 due=60 lateness=0
+- P21 completion=100 due=95 lateness=5
+- P22 completion=115 due=120 lateness=0
+- P23 completion=55 due=50 lateness=5
+- P24 completion=70 due=70 lateness=0
+- P25 completion=55 due=30 lateness=25
+- P26 completion=75 due=60 lateness=15
+- P27 completion=85 due=95 lateness=0
+- P28 completion=95 due=120 lateness=0
+- P29 completion=70 due=50 lateness=20
+- P3 completion=95 due=95 lateness=0
+- P30 completion=86 due=70 lateness=16
+- P31 completion=55 due=30 lateness=25
+- P32 completion=65 due=60 lateness=5
+- P33 completion=100 due=95 lateness=5
+- P34 completion=115 due=120 lateness=0
+- P35 completion=70 due=50 lateness=20
+- P36 completion=70 due=70 lateness=0
+- P37 completion=55 due=30 lateness=25
+- P38 completion=85 due=60 lateness=25
+- P39 completion=85 due=95 lateness=0
+- P4 completion=100 due=120 lateness=0
+- P40 completion=95 due=120 lateness=0
+- P41 completion=70 due=50 lateness=20
+- P42 completion=86 due=70 lateness=16
+- P43 completion=70 due=30 lateness=40
+- P44 completion=65 due=60 lateness=5
+- P45 completion=100 due=95 lateness=5
+- P46 completion=115 due=120 lateness=0
+- P47 completion=70 due=50 lateness=20
+- P48 completion=70 due=70 lateness=0
+- P49 completion=70 due=30 lateness=40
+- P5 completion=85 due=50 lateness=35
+- P50 completion=65 due=60 lateness=5
+- P6 completion=90 due=70 lateness=20
+- P7 completion=60 due=30 lateness=30
+- P8 completion=60 due=60 lateness=0
+- P9 completion=100 due=95 lateness=5
+
+====================
+ITERATION 2
+Total lateness = 603
+
+Chamber setpoints (fixed for this iteration):
+- T001 stations=8 volt=false humAdj=false => 16C/NORMAL
+- T002 stations=8 volt=true humAdj=true => 25C/85%
+- T003 stations=8 volt=true humAdj=true => 32C/85%
+- T004 stations=8 volt=true humAdj=true => 32C/NORMAL
+- T005 stations=8 volt=true humAdj=true => 38C/NORMAL
+- T006 stations=8 volt=false humAdj=false => 43C/NORMAL
+- T007 stations=8 volt=false humAdj=false => 25C/NORMAL
+- T008 stations=12 volt=true humAdj=false => 43C/NORMAL
+- T009 stations=12 volt=false humAdj=false => 25C/NORMAL
+- T010 stations=12 volt=false humAdj=true => 25C/85%
+- T011 stations=12 volt=false humAdj=true => 32C/85%
+- T012 stations=12 volt=false humAdj=true => 43C/NORMAL
+- T013 stations=12 volt=false humAdj=true => 10C/NORMAL
+- T014 stations=6 volt=false humAdj=true => 32C/85%
+- T015 stations=6 volt=false humAdj=true => 32C/85%
+- T016 stations=6 volt=true humAdj=false => 25C/NORMAL
+- T017 stations=6 volt=true humAdj=false => 10C/NORMAL
+- T018 stations=6 volt=true humAdj=false => 43C/NORMAL
+- T019 stations=6 volt=true humAdj=false => 25C/NORMAL
+- T020 stations=6 volt=true humAdj=false => 10C/NORMAL
+- T021 stations=6 volt=true humAdj=false => 43C/NORMAL
+- T022 stations=6 volt=true humAdj=false => 16C/NORMAL
+- T023 stations=6 volt=true humAdj=false => 32C/NORMAL
+- T024 stations=8 volt=false humAdj=true => 25C/85%
+- T025 stations=8 volt=true humAdj=true => 43C/NORMAL
+- T026 stations=12 volt=true humAdj=false => 25C/NORMAL
+- T027 stations=12 volt=true humAdj=false => 10C/NORMAL
+- T028 stations=12 volt=true humAdj=false => 16C/NORMAL
+
+Project sample counts:
+- P1 samples=3 due=30 needsVolt=true
+- P10 samples=2 due=120 needsVolt=true
+- P11 samples=4 due=50 needsVolt=false
+- P12 samples=3 due=70 needsVolt=false
+- P13 samples=3 due=30 needsVolt=true
+- P14 samples=3 due=60 needsVolt=true
+- P15 samples=2 due=95 needsVolt=false
+- P16 samples=2 due=120 needsVolt=false
+- P17 samples=3 due=50 needsVolt=true
+- P18 samples=2 due=70 needsVolt=true
+- P19 samples=3 due=30 needsVolt=false
+- P2 samples=2 due=60 needsVolt=true
+- P20 samples=3 due=60 needsVolt=false
+- P21 samples=3 due=95 needsVolt=true
+- P22 samples=2 due=120 needsVolt=true
+- P23 samples=3 due=50 needsVolt=false
+- P24 samples=3 due=70 needsVolt=false
+- P25 samples=3 due=30 needsVolt=true
+- P26 samples=3 due=60 needsVolt=true
+- P27 samples=2 due=95 needsVolt=false
+- P28 samples=2 due=120 needsVolt=false
+- P29 samples=2 due=50 needsVolt=true
+- P3 samples=2 due=95 needsVolt=false
+- P30 samples=2 due=70 needsVolt=true
+- P31 samples=3 due=30 needsVolt=false
+- P32 samples=2 due=60 needsVolt=false
+- P33 samples=3 due=95 needsVolt=true
+- P34 samples=2 due=120 needsVolt=true
+- P35 samples=2 due=50 needsVolt=false
+- P36 samples=3 due=70 needsVolt=false
+- P37 samples=3 due=30 needsVolt=true
+- P38 samples=3 due=60 needsVolt=true
+- P39 samples=2 due=95 needsVolt=false
+- P4 samples=2 due=120 needsVolt=false
+- P40 samples=2 due=120 needsVolt=false
+- P41 samples=2 due=50 needsVolt=true
+- P42 samples=2 due=70 needsVolt=true
+- P43 samples=2 due=30 needsVolt=false
+- P44 samples=2 due=60 needsVolt=false
+- P45 samples=2 due=95 needsVolt=true
+- P46 samples=2 due=120 needsVolt=true
+- P47 samples=2 due=50 needsVolt=false
+- P48 samples=3 due=70 needsVolt=false
+- P49 samples=2 due=30 needsVolt=true
+- P5 samples=2 due=50 needsVolt=true
+- P50 samples=2 due=60 needsVolt=false
+- P6 samples=2 due=70 needsVolt=true
+- P7 samples=3 due=30 needsVolt=false
+- P8 samples=4 due=60 needsVolt=false
+- P9 samples=3 due=95 needsVolt=true
+
+Project results:
+- P1 completion=60 due=30 lateness=30
+- P10 completion=115 due=120 lateness=0
+- P11 completion=55 due=50 lateness=5
+- P12 completion=70 due=70 lateness=0
+- P13 completion=55 due=30 lateness=25
+- P14 completion=85 due=60 lateness=25
+- P15 completion=85 due=95 lateness=0
+- P16 completion=95 due=120 lateness=0
+- P17 completion=70 due=50 lateness=20
+- P18 completion=86 due=70 lateness=16
+- P19 completion=55 due=30 lateness=25
+- P2 completion=85 due=60 lateness=25
+- P20 completion=60 due=60 lateness=0
+- P21 completion=100 due=95 lateness=5
+- P22 completion=115 due=120 lateness=0
+- P23 completion=55 due=50 lateness=5
+- P24 completion=70 due=70 lateness=0
+- P25 completion=55 due=30 lateness=25
+- P26 completion=75 due=60 lateness=15
+- P27 completion=85 due=95 lateness=0
+- P28 completion=95 due=120 lateness=0
+- P29 completion=70 due=50 lateness=20
+- P3 completion=95 due=95 lateness=0
+- P30 completion=86 due=70 lateness=16
+- P31 completion=55 due=30 lateness=25
+- P32 completion=65 due=60 lateness=5
+- P33 completion=100 due=95 lateness=5
+- P34 completion=115 due=120 lateness=0
+- P35 completion=70 due=50 lateness=20
+- P36 completion=70 due=70 lateness=0
+- P37 completion=55 due=30 lateness=25
+- P38 completion=85 due=60 lateness=25
+- P39 completion=85 due=95 lateness=0
+- P4 completion=100 due=120 lateness=0
+- P40 completion=95 due=120 lateness=0
+- P41 completion=70 due=50 lateness=20
+- P42 completion=86 due=70 lateness=16
+- P43 completion=70 due=30 lateness=40
+- P44 completion=65 due=60 lateness=5
+- P45 completion=100 due=95 lateness=5
+- P46 completion=115 due=120 lateness=0
+- P47 completion=70 due=50 lateness=20
+- P48 completion=70 due=70 lateness=0
+- P49 completion=70 due=30 lateness=40
+- P5 completion=85 due=50 lateness=35
+- P50 completion=65 due=60 lateness=5
+- P6 completion=90 due=70 lateness=20
+- P7 completion=60 due=30 lateness=30
+- P8 completion=60 due=60 lateness=0
+- P9 completion=100 due=95 lateness=5
+
+====================
+BEST (min total lateness): iter=1 totalLateness=603
+
+CSV exported to: /workspace/csv_out
+- schedule_by_project.csv
+- schedule_by_station.csv
+Rows written: 569
+
+====================
+DIAGNOSTICS (why lateness can happen with many stations)
+Effective station capacity by ENV (only stations in matching rooms can run that test):
+- 43C/NORMAL stations=52
+- 25C/NORMAL stations=44
+- 10C/NORMAL stations=36
+- 32C/85% stations=32
+- 25C/85% stations=28
+- 16C/NORMAL stations=26
+- 32C/NORMAL stations=14
+- 38C/NORMAL stations=8
+
+ENV workload (jobDays) / station (rough bottleneck indicator):
+- 38C/NORMAL workDays=250 stations=8 workDaysPerStation=31.25
+- 10C/NORMAL workDays=1000 stations=36 workDaysPerStation=27.78
+- 25C/85% workDays=750 stations=28 workDaysPerStation=26.79
+- 32C/NORMAL workDays=375 stations=14 workDaysPerStation=26.79
+- 43C/NORMAL workDays=1370 stations=52 workDaysPerStation=26.35
+- 16C/NORMAL workDays=625 stations=26 workDaysPerStation=24.04
+- 25C/NORMAL workDays=1050 stations=44 workDaysPerStation=23.86
+- 32C/85% workDays=750 stations=32 workDaysPerStation=23.44
+
+Lower-bound check (even with infinite stations & samples):
+- Projects with dueDate < (gas + pulldown + max(other/cu duration)) : 0 / 50
+  (If this count > 0, some lateness is mathematically unavoidable.)
+
+Utilization summary (based on produced schedule):
+- Horizon (max end) = 115 days
+- Avg station utilization = 0.2751
+- Max station utilization = 0.6522
+- Avg chamber utilization = 0.2490
+
+Top 10 busiest stations:
+- T017[st1] busyDays=75 util=0.6522
+- T017[st3] busyDays=60 util=0.5217
+- T017[st2] busyDays=60 util=0.5217
+- T002[st3] busyDays=60 util=0.5217
+- T002[st4] busyDays=60 util=0.5217
+- T002[st2] busyDays=60 util=0.5217
+- T002[st5] busyDays=60 util=0.5217
+- T017[st0] busyDays=60 util=0.5217
+- T003[st4] busyDays=60 util=0.5217
+- T003[st5] busyDays=60 util=0.5217

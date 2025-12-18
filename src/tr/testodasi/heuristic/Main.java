@@ -58,6 +58,24 @@ public final class Main {
         if ("EDD".equals(v)) Data.PROJECT_DISPATCH_RULE = Data.ProjectDispatchRule.EDD;
         if ("ATC".equals(v)) Data.PROJECT_DISPATCH_RULE = Data.ProjectDispatchRule.ATC;
       }
+      if (a != null && a.startsWith("--mode=")) {
+        String v = a.substring("--mode=".length()).trim().toUpperCase();
+        if ("JOB".equals(v) || "JOB_BASED".equals(v)) Data.SCHEDULING_MODE = Data.SchedulingMode.JOB_BASED;
+        if ("PROJECT".equals(v) || "PROJECT_BASED".equals(v)) Data.SCHEDULING_MODE = Data.SchedulingMode.PROJECT_BASED;
+      }
+      if (a != null && a.startsWith("--jobRule=")) {
+        String v = a.substring("--jobRule=".length()).trim().toUpperCase();
+        if ("EDD".equals(v)) Data.JOB_DISPATCH_RULE = Data.JobDispatchRule.EDD;
+        if ("ATC".equals(v)) Data.JOB_DISPATCH_RULE = Data.JobDispatchRule.ATC;
+        if ("MIN_SLACK".equals(v) || "SLACK".equals(v)) Data.JOB_DISPATCH_RULE = Data.JobDispatchRule.MIN_SLACK;
+      }
+      if (a != null && a.startsWith("--jobK=")) {
+        try {
+          Data.JOB_ATC_K = Double.parseDouble(a.substring("--jobK=".length()).trim());
+        } catch (NumberFormatException ignored) {
+          // ignore invalid
+        }
+      }
       if (a != null && a.startsWith("--atcK=")) {
         try {
           Data.ATC_K = Double.parseDouble(a.substring("--atcK=".length()).trim());
@@ -89,6 +107,33 @@ public final class Main {
         } catch (NumberFormatException ignored) {
           // ignore invalid
         }
+      }
+      if (a != null && a.startsWith("--roomLS=")) {
+        String v = a.substring("--roomLS=".length()).trim();
+        Data.ENABLE_ROOM_LOCAL_SEARCH = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+      }
+      if (a != null && a.startsWith("--roomLSMaxEvals=")) {
+        try {
+          Data.ROOM_LS_MAX_EVALS = Integer.parseInt(a.substring("--roomLSMaxEvals=".length()).trim());
+        } catch (NumberFormatException ignored) {
+          // ignore invalid
+        }
+      }
+      if (a != null && a.startsWith("--roomLSSwap=")) {
+        String v = a.substring("--roomLSSwap=".length()).trim();
+        Data.ROOM_LS_ENABLE_SWAP = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+      }
+      if (a != null && a.startsWith("--roomLSMove=")) {
+        String v = a.substring("--roomLSMove=".length()).trim();
+        Data.ROOM_LS_ENABLE_MOVE = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+      }
+      if (a != null && a.startsWith("--roomLSIncludeSample=")) {
+        String v = a.substring("--roomLSIncludeSample=".length()).trim();
+        Data.ROOM_LS_INCLUDE_SAMPLE_HEURISTIC = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+      }
+      if (a != null && a.startsWith("--validate=")) {
+        String v = a.substring("--validate=".length()).trim();
+        Data.ENABLE_SCHEDULE_VALIDATION = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
       }
     }
     HeuristicSolver solver = new HeuristicSolver(verbose);
@@ -295,6 +340,20 @@ public final class Main {
               throw new RuntimeException(ex);
             }
           });
+    }
+
+    // 5) ENV summary (effective capacity vs workload)
+    Path envSummary = dir.resolve("env_summary.csv");
+    try (BufferedWriter w = Files.newBufferedWriter(envSummary)) {
+      w.write("iteration,env,tempC,humidity,stations,workDays,workDaysPerStation");
+      w.newLine();
+      List<EnvRow> envRows = computeEnvSummary(sol, projectById);
+      envRows.sort((a, b) -> Double.compare(b.workDaysPerStation, a.workDaysPerStation));
+      for (EnvRow r : envRows) {
+        w.write(sol.iteration + "," + r.env + "," + r.env.temperatureC + "," + r.env.humidity + "," +
+            r.stations + "," + r.workDays + "," + fmt(r.workDaysPerStation));
+        w.newLine();
+      }
     }
 
     return sol.schedule.size();
@@ -537,5 +596,49 @@ public final class Main {
     double avgChU = chamberUtil.isEmpty() ? 0.0 : (sumChU / chamberUtil.size());
 
     return new UtilizationSummary(horizon, stationUtil, chamberUtil, avgU, maxU, avgChU);
+  }
+
+  private static final class EnvRow {
+    final Env env;
+    final int stations;
+    final long workDays;
+    final double workDaysPerStation;
+
+    EnvRow(Env env, int stations, long workDays) {
+      this.env = env;
+      this.stations = stations;
+      this.workDays = workDays;
+      this.workDaysPerStation = stations == 0 ? Double.POSITIVE_INFINITY : (workDays / (double) stations);
+    }
+  }
+
+  private static List<EnvRow> computeEnvSummary(Solution sol, Map<String, Project> projectById) {
+    Map<Env, Integer> stationsByEnv = new HashMap<>();
+    for (ChamberSpec c : Data.CHAMBERS) {
+      Env env = sol.chamberEnv.get(c.id);
+      if (env == null) continue;
+      stationsByEnv.merge(env, c.stations, Integer::sum);
+    }
+    Map<Env, Long> workByEnv = new HashMap<>();
+    for (Project p : sol.projects) {
+      for (int ti = 0; ti < Data.TESTS.size(); ti++) {
+        if (!p.required[ti]) continue;
+        TestDef t = Data.TESTS.get(ti);
+        int jobs = 1;
+        if (t.category == TestCategory.PULLDOWN) jobs = p.samples;
+        workByEnv.merge(t.env, (long) jobs * t.durationDays, Long::sum);
+      }
+    }
+    List<EnvRow> rows = new ArrayList<>();
+    for (Env env : stationsByEnv.keySet()) {
+      rows.add(new EnvRow(env, stationsByEnv.getOrDefault(env, 0), workByEnv.getOrDefault(env, 0L)));
+    }
+    // include envs that have work but zero stations (shouldn't happen in feasible solution)
+    for (Env env : workByEnv.keySet()) {
+      if (!stationsByEnv.containsKey(env)) {
+        rows.add(new EnvRow(env, 0, workByEnv.getOrDefault(env, 0L)));
+      }
+    }
+    return rows;
   }
 }

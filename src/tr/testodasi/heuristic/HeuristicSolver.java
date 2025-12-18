@@ -33,6 +33,21 @@ public final class HeuristicSolver {
     for (int iter = 1; iter <= 5; iter++) {
       Map<String, Env> room = stage1_assignRooms(current);
 
+      if (Data.ENABLE_ROOM_LOCAL_SEARCH) {
+        RoomScore base = scoreRoom(room, current);
+        Map<String, Env> improvedRoom = improveRoomsByLocalSearch(current, room, base.totalLateness);
+        RoomScore after = scoreRoom(improvedRoom, current);
+        if (after.totalLateness < base.totalLateness) {
+          if (verbose) {
+            System.out.println("INFO: Room local-search improved total lateness: " +
+                base.totalLateness + " -> " + after.totalLateness);
+          }
+          room = improvedRoom;
+        } else if (verbose) {
+          System.out.println("INFO: Room local-search no improvement (baseline=" + base.totalLateness + ")");
+        }
+      }
+
       // Eğer oda setleri artık değişmiyorsa sabit noktaya geldik: tekrar üretmek yerine dur.
       if (prevRoom != null && prevRoom.equals(room)) {
         if (verbose) {
@@ -61,11 +76,151 @@ public final class HeuristicSolver {
 
       solutions.add(new Solution(iter, eval.totalLateness, deepCopy(improved), room, eval.projectResults, eval.schedule));
 
+      if (Data.ENABLE_SCHEDULE_VALIDATION) {
+        List<String> violations = Scheduler.validateSchedule(improved, room, eval.schedule);
+        if (!violations.isEmpty()) {
+          StringBuilder sb = new StringBuilder();
+          sb.append("Schedule validation failed (").append(violations.size()).append(" violations). First 20:\n");
+          for (int i = 0; i < Math.min(20, violations.size()); i++) {
+            sb.append("- ").append(violations.get(i)).append("\n");
+          }
+          throw new IllegalStateException(sb.toString());
+        }
+      }
+
       prevRoom = room;
       current = deepCopy(improved);
     }
 
     return solutions;
+  }
+
+  private record RoomScore(int totalLateness) {}
+
+  private RoomScore scoreRoom(Map<String, Env> room, List<Project> projects) {
+    if (Data.ROOM_LS_INCLUDE_SAMPLE_HEURISTIC) {
+      List<Project> improved = stage2_increaseSamples(room, projects);
+      Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
+      return new RoomScore(eval.totalLateness);
+    }
+    Scheduler.EvalResult eval = scheduler.evaluate(projects, room);
+    return new RoomScore(eval.totalLateness);
+  }
+
+  private Map<String, Env> improveRoomsByLocalSearch(List<Project> projects, Map<String, Env> startRoom, int baseline) {
+    int maxEvals = Math.max(10, Data.ROOM_LS_MAX_EVALS);
+    Map<String, Env> best = new LinkedHashMap<>(startRoom);
+    int bestScore = baseline;
+
+    // demanded env set from current projects
+    Set<Env> demanded = new LinkedHashSet<>();
+    Set<Env> demandedByVolt = new LinkedHashSet<>();
+    for (Project p : projects) {
+      for (int ti = 0; ti < Data.TESTS.size(); ti++) {
+        if (!p.required[ti]) continue;
+        Env env = Data.TESTS.get(ti).env;
+        demanded.add(env);
+        if (p.needsVoltage) demandedByVolt.add(env);
+      }
+    }
+    if (demanded.isEmpty()) return best;
+
+    int evals = 0;
+    boolean improvedAny;
+    do {
+      improvedAny = false;
+
+      // SWAP neighbors
+      if (Data.ROOM_LS_ENABLE_SWAP) {
+        for (int i = 0; i < Data.CHAMBERS.size() && evals < maxEvals; i++) {
+          for (int j = i + 1; j < Data.CHAMBERS.size() && evals < maxEvals; j++) {
+            ChamberSpec ci = Data.CHAMBERS.get(i);
+            ChamberSpec cj = Data.CHAMBERS.get(j);
+            Env ei = best.get(ci.id);
+            Env ej = best.get(cj.id);
+            if (ei == null || ej == null || ei.equals(ej)) continue;
+            if (!canAssign(ci, ej) || !canAssign(cj, ei)) continue;
+
+            Map<String, Env> candRoom = new LinkedHashMap<>(best);
+            candRoom.put(ci.id, ej);
+            candRoom.put(cj.id, ei);
+            if (!isRoomFeasible(candRoom, demanded, demandedByVolt)) continue;
+            evals++;
+            int s = scoreRoom(candRoom, projects).totalLateness;
+            if (s < bestScore) {
+              best = candRoom;
+              bestScore = s;
+              improvedAny = true;
+              break;
+            }
+          }
+          if (improvedAny) break;
+        }
+      }
+
+      // MOVE neighbors
+      if (!improvedAny && Data.ROOM_LS_ENABLE_MOVE) {
+        for (int i = 0; i < Data.CHAMBERS.size() && evals < maxEvals; i++) {
+          ChamberSpec c = Data.CHAMBERS.get(i);
+          Env cur = best.get(c.id);
+          for (Env target : demanded) {
+            if (evals >= maxEvals) break;
+            if (target.equals(cur)) continue;
+            if (!canAssign(c, target)) continue;
+            Map<String, Env> candRoom = new LinkedHashMap<>(best);
+            candRoom.put(c.id, target);
+            if (!isRoomFeasible(candRoom, demanded, demandedByVolt)) continue;
+            evals++;
+            int s = scoreRoom(candRoom, projects).totalLateness;
+            if (s < bestScore) {
+              best = candRoom;
+              bestScore = s;
+              improvedAny = true;
+              break;
+            }
+          }
+          if (improvedAny) break;
+        }
+      }
+
+    } while (improvedAny && evals < maxEvals);
+
+    if (verbose) {
+      System.out.println("INFO: Room local-search evals=" + evals + " best=" + bestScore + " baseline=" + baseline);
+    }
+    return best;
+  }
+
+  private static boolean canAssign(ChamberSpec chamber, Env env) {
+    if (env.humidity == Humidity.H85 && !chamber.humidityAdjustable) return false;
+    return true;
+  }
+
+  private static boolean isRoomFeasible(Map<String, Env> room, Set<Env> demanded, Set<Env> demandedByVolt) {
+    // (1) each demanded env has at least 1 room
+    Map<Env, Integer> count = new HashMap<>();
+    Map<Env, Integer> countVoltRooms = new HashMap<>();
+    Map<String, ChamberSpec> chamberById = new HashMap<>();
+    for (ChamberSpec c : Data.CHAMBERS) chamberById.put(c.id, c);
+
+    for (var e : room.entrySet()) {
+      Env env = e.getValue();
+      if (env == null) continue;
+      ChamberSpec ch = chamberById.get(e.getKey());
+      if (ch == null) continue;
+      // humidity feasibility
+      if (env.humidity == Humidity.H85 && !ch.humidityAdjustable) return false;
+      count.merge(env, 1, Integer::sum);
+      if (ch.voltageCapable) countVoltRooms.merge(env, 1, Integer::sum);
+    }
+    for (Env env : demanded) {
+      if (count.getOrDefault(env, 0) <= 0) return false;
+    }
+    // (2) env demanded by voltage projects should have at least 1 voltage-capable room
+    for (Env env : demandedByVolt) {
+      if (countVoltRooms.getOrDefault(env, 0) <= 0) return false;
+    }
+    return true;
   }
 
   private List<Project> stage2_increaseSamples(Map<String, Env> room, List<Project> startProjects) {
