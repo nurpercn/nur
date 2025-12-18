@@ -55,6 +55,20 @@ public final class Main {
           // ignore invalid
         }
       }
+      if (a != null && a.startsWith("--orderLSWindow=")) {
+        try {
+          Data.ORDER_LS_WINDOW = Integer.parseInt(a.substring("--orderLSWindow=".length()).trim());
+        } catch (NumberFormatException ignored) {
+          // ignore invalid
+        }
+      }
+      if (a != null && a.startsWith("--orderLSMaxEvals=")) {
+        try {
+          Data.ORDER_LS_MAX_EVALS = Integer.parseInt(a.substring("--orderLSMaxEvals=".length()).trim());
+        } catch (NumberFormatException ignored) {
+          // ignore invalid
+        }
+      }
     }
     HeuristicSolver solver = new HeuristicSolver(verbose);
     List<Solution> sols = solver.solve();

@@ -42,6 +42,12 @@ public final class Data {
   /** Local search maksimum tur sayısı (adjacent swap pass). */
   public static int ORDER_LS_MAX_PASSES = 2;
 
+  /** Local search hareket penceresi (insertion/move). Örn 5 => i konumundan i±5 arası denenir. */
+  public static int ORDER_LS_WINDOW = 5;
+
+  /** Local search toplam değerlendirme limiti (performans için). */
+  public static int ORDER_LS_MAX_EVALS = 2000;
+
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
   public static final int DUE_DATE_OFFSET_DAYS = 0;
 

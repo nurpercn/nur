@@ -295,23 +295,51 @@ public final class HeuristicSolver {
 
     Scheduler.EvalResult best = scheduler.evaluateFixedOrder(order, room);
     int passes = Math.max(1, Data.ORDER_LS_MAX_PASSES);
+    int window = Math.max(1, Data.ORDER_LS_WINDOW);
+    int maxEvals = Math.max(50, Data.ORDER_LS_MAX_EVALS);
+    int evals = 0;
 
-    for (int pass = 0; pass < passes; pass++) {
+    // VNS benzeri: insertion/move (i -> j) ile first-improvement, birkaç pass.
+    for (int pass = 0; pass < passes && evals < maxEvals; pass++) {
       boolean improved = false;
-      for (int i = 0; i < order.size() - 1; i++) {
-        swap(order, i, i + 1);
-        Scheduler.EvalResult cand = scheduler.evaluateFixedOrder(order, room);
-        if (cand.totalLateness < best.totalLateness) {
-          best = cand;
-          improved = true;
-        } else {
-          swap(order, i, i + 1); // geri al
+
+      outer:
+      for (int i = 0; i < order.size() && evals < maxEvals; i++) {
+        int from = i;
+        int lo = Math.max(0, from - window);
+        int hi = Math.min(order.size() - 1, from + window);
+
+        for (int to = lo; to <= hi && evals < maxEvals; to++) {
+          if (to == from) continue;
+
+          Project moved = order.remove(from);
+          order.add(to, moved);
+
+          Scheduler.EvalResult cand = scheduler.evaluateFixedOrder(order, room);
+          evals++;
+
+          if (cand.totalLateness < best.totalLateness) {
+            best = cand;
+            improved = true;
+            // İlk iyileştirmeyi kabul edip baştan başla (first-improvement).
+            break outer;
+          } else {
+            // geri al
+            order.remove(to);
+            order.add(from, moved);
+          }
         }
       }
+
       if (!improved) break;
     }
 
-    return best.totalLateness < baseline ? best : best; // return best (caller compares)
+    if (verbose) {
+      System.out.println("INFO: Order local-search evals=" + evals +
+          " window=" + window + " passes=" + passes +
+          " best=" + best.totalLateness + " baseline=" + baseline);
+    }
+    return best;
   }
 
   private static void swap(List<Project> list, int i, int j) {
