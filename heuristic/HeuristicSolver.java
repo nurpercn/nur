@@ -525,9 +525,4 @@ public final class HeuristicSolver {
     return best;
   }
 
-  private static void swap(List<Project> list, int i, int j) {
-    Project tmp = list.get(i);
-    list.set(i, list.get(j));
-    list.set(j, tmp);
-  }
 }
