@@ -97,6 +97,22 @@ public final class Data {
   /** Sample artırma heuristiğini kapat/aç. */
   public static boolean ENABLE_SAMPLE_INCREASE = false;
 
+  public enum SampleSearchStrategy {
+    /** Eski greedy: tek projeyi +1 dene, en iyisini al, iyileşme yoksa dur. */
+    GREEDY_1STEP,
+    /** Daha güçlü: 1-step iyileşme yoksa 2-step (iki projeyi aynı anda +1) de dener. */
+    GREEDY_1STEP_THEN_2STEP
+  }
+
+  /** Sample artırma arama stratejisi. */
+  public static SampleSearchStrategy SAMPLE_SEARCH_STRATEGY = SampleSearchStrategy.GREEDY_1STEP_THEN_2STEP;
+
+  /** Sample üst sınırı (kontrolsüz büyümeyi engeller). */
+  public static int SAMPLE_MAX = 8;
+
+  /** Sample artırma toplam deneme bütçesi (değerlendirme sayısı). */
+  public static int SAMPLE_SEARCH_MAX_EVALS = 8000;
+
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
   public static final int DUE_DATE_OFFSET_DAYS = 0;
 
