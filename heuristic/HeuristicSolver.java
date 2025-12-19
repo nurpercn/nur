@@ -56,7 +56,7 @@ public final class HeuristicSolver {
         break;
       }
 
-      // Stage2: EDD scheduling + sample artırma
+      // Stage2: sample ayarlama (±1/±2 local search) + scheduling değerlendirmesi
       List<Project> improved = stage2_adjustSamples(room, current);
       Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
 
@@ -519,9 +519,4 @@ public final class HeuristicSolver {
     return best;
   }
 
-  private static void swap(List<Project> list, int i, int j) {
-    Project tmp = list.get(i);
-    list.set(i, list.get(j));
-    list.set(j, tmp);
-  }
 }

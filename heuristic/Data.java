@@ -100,7 +100,7 @@ public final class Data {
   /** Sample üst sınırı (kontrolsüz büyümeyi engeller). */
   public static int SAMPLE_MAX = 8;
 
-  /** Sample artırma toplam deneme bütçesi (değerlendirme sayısı). */
+  /** Sample ayarlama (artır/azalt) toplam deneme bütçesi (değerlendirme sayısı). */
   public static int SAMPLE_SEARCH_MAX_EVALS = 8000;
 
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
