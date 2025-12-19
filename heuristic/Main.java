@@ -54,59 +54,31 @@ public final class Main {
         }
       }
       if (a != null && a.startsWith("--dispatch=")) {
-        String v = a.substring("--dispatch=".length()).trim().toUpperCase();
-        if ("EDD".equals(v)) Data.PROJECT_DISPATCH_RULE = Data.ProjectDispatchRule.EDD;
-        if ("ATC".equals(v)) Data.PROJECT_DISPATCH_RULE = Data.ProjectDispatchRule.ATC;
+        // deprecated: only JOB_BASED + EDD supported
       }
       if (a != null && a.startsWith("--mode=")) {
-        String v = a.substring("--mode=".length()).trim().toUpperCase();
-        if ("JOB".equals(v) || "JOB_BASED".equals(v)) Data.SCHEDULING_MODE = Data.SchedulingMode.JOB_BASED;
-        if ("PROJECT".equals(v) || "PROJECT_BASED".equals(v)) Data.SCHEDULING_MODE = Data.SchedulingMode.PROJECT_BASED;
+        // deprecated: only JOB_BASED supported
       }
       if (a != null && a.startsWith("--jobRule=")) {
-        String v = a.substring("--jobRule=".length()).trim().toUpperCase();
-        if ("EDD".equals(v)) Data.JOB_DISPATCH_RULE = Data.JobDispatchRule.EDD;
-        if ("ATC".equals(v)) Data.JOB_DISPATCH_RULE = Data.JobDispatchRule.ATC;
-        if ("MIN_SLACK".equals(v) || "SLACK".equals(v)) Data.JOB_DISPATCH_RULE = Data.JobDispatchRule.MIN_SLACK;
+        // deprecated: only EDD supported
       }
       if (a != null && a.startsWith("--jobK=")) {
-        try {
-          Data.JOB_ATC_K = Double.parseDouble(a.substring("--jobK=".length()).trim());
-        } catch (NumberFormatException ignored) {
-          // ignore invalid
-        }
+        // deprecated
       }
       if (a != null && a.startsWith("--atcK=")) {
-        try {
-          Data.ATC_K = Double.parseDouble(a.substring("--atcK=".length()).trim());
-        } catch (NumberFormatException ignored) {
-          // ignore invalid
-        }
+        // deprecated
       }
       if (a != null && a.startsWith("--orderLS=")) {
-        String v = a.substring("--orderLS=".length()).trim();
-        Data.ENABLE_ORDER_LOCAL_SEARCH = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+        // deprecated
       }
       if (a != null && a.startsWith("--orderLSPasses=")) {
-        try {
-          Data.ORDER_LS_MAX_PASSES = Integer.parseInt(a.substring("--orderLSPasses=".length()).trim());
-        } catch (NumberFormatException ignored) {
-          // ignore invalid
-        }
+        // deprecated
       }
       if (a != null && a.startsWith("--orderLSWindow=")) {
-        try {
-          Data.ORDER_LS_WINDOW = Integer.parseInt(a.substring("--orderLSWindow=".length()).trim());
-        } catch (NumberFormatException ignored) {
-          // ignore invalid
-        }
+        // deprecated
       }
       if (a != null && a.startsWith("--orderLSMaxEvals=")) {
-        try {
-          Data.ORDER_LS_MAX_EVALS = Integer.parseInt(a.substring("--orderLSMaxEvals=".length()).trim());
-        } catch (NumberFormatException ignored) {
-          // ignore invalid
-        }
+        // deprecated
       }
       if (a != null && a.startsWith("--roomLS=")) {
         String v = a.substring("--roomLS=".length()).trim();
@@ -177,8 +149,8 @@ public final class Main {
       System.out.println("- INITIAL_SAMPLES=" + Data.INITIAL_SAMPLES + " (MIN_SAMPLES=" + Data.MIN_SAMPLES + ")");
       System.out.println("- ENABLE_SAMPLE_INCREASE=" + Data.ENABLE_SAMPLE_INCREASE);
       System.out.println("- SAMPLE_MAX=" + Data.SAMPLE_MAX + " SAMPLE_SEARCH_MAX_EVALS=" + Data.SAMPLE_SEARCH_MAX_EVALS);
-      System.out.println("- SCHEDULING_MODE=" + Data.SCHEDULING_MODE + " PROJECT_DISPATCH_RULE=" + Data.PROJECT_DISPATCH_RULE + " JOB_DISPATCH_RULE=" + Data.JOB_DISPATCH_RULE);
-      System.out.println("- ENABLE_ROOM_LOCAL_SEARCH=" + Data.ENABLE_ROOM_LOCAL_SEARCH + " ENABLE_ORDER_LOCAL_SEARCH=" + Data.ENABLE_ORDER_LOCAL_SEARCH);
+      System.out.println("- SCHEDULING_MODE=" + Data.SCHEDULING_MODE + " JOB_DISPATCH_RULE=" + Data.JOB_DISPATCH_RULE);
+      System.out.println("- ENABLE_ROOM_LOCAL_SEARCH=" + Data.ENABLE_ROOM_LOCAL_SEARCH);
     }
 
     HeuristicSolver solver = new HeuristicSolver(verbose);

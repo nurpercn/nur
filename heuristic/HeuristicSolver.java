@@ -60,23 +60,6 @@ public final class HeuristicSolver {
       List<Project> improved = Data.ENABLE_SAMPLE_INCREASE ? stage2_increaseSamples(room, current) : deepCopy(current);
       Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
 
-      // Ek iyileştirme: proje sırasını local search ile iyileştir (EDD tabanlı).
-      // Not: JOB_BASED modda "sabit proje sırası" kavramı yok; bu yüzden sadece PROJECT_BASED iken uygula.
-      if (Data.SCHEDULING_MODE == Data.SchedulingMode.PROJECT_BASED &&
-          Data.ENABLE_ORDER_LOCAL_SEARCH &&
-          Data.PROJECT_DISPATCH_RULE == Data.ProjectDispatchRule.EDD) {
-        Scheduler.EvalResult lsEval = improveOrderByLocalSearch(improved, room, eval.totalLateness);
-        if (lsEval.totalLateness < eval.totalLateness) {
-          if (verbose) {
-            System.out.println("INFO: Order local-search improved total lateness: " +
-                eval.totalLateness + " -> " + lsEval.totalLateness);
-          }
-          eval = lsEval;
-        } else if (verbose) {
-          System.out.println("INFO: Order local-search no improvement (baseline=" + eval.totalLateness + ")");
-        }
-      }
-
       solutions.add(new Solution(iter, eval.totalLateness, deepCopy(improved), room, eval.projectResults, eval.schedule));
 
       if (Data.ENABLE_SCHEDULE_VALIDATION) {
@@ -472,62 +455,6 @@ public final class HeuristicSolver {
     List<Project> out = new ArrayList<>();
     for (Project p : ps) out.add(p.copy());
     return out;
-  }
-
-  private Scheduler.EvalResult improveOrderByLocalSearch(List<Project> projects, Map<String, Env> room, int baseline) {
-    // Başlangıç: EDD sırası
-    List<Project> order = projects.stream().map(Project::copy)
-        .sorted(Comparator.comparingInt(p -> p.dueDateDays))
-        .toList();
-    order = new ArrayList<>(order);
-
-    Scheduler.EvalResult best = scheduler.evaluateFixedOrder(order, room);
-    int passes = Math.max(1, Data.ORDER_LS_MAX_PASSES);
-    int window = Math.max(1, Data.ORDER_LS_WINDOW);
-    int maxEvals = Math.max(50, Data.ORDER_LS_MAX_EVALS);
-    int evals = 0;
-
-    // VNS benzeri: insertion/move (i -> j) ile first-improvement, birkaç pass.
-    for (int pass = 0; pass < passes && evals < maxEvals; pass++) {
-      boolean improved = false;
-
-      outer:
-      for (int i = 0; i < order.size() && evals < maxEvals; i++) {
-        int from = i;
-        int lo = Math.max(0, from - window);
-        int hi = Math.min(order.size() - 1, from + window);
-
-        for (int to = lo; to <= hi && evals < maxEvals; to++) {
-          if (to == from) continue;
-
-          Project moved = order.remove(from);
-          order.add(to, moved);
-
-          Scheduler.EvalResult cand = scheduler.evaluateFixedOrder(order, room);
-          evals++;
-
-          if (cand.totalLateness < best.totalLateness) {
-            best = cand;
-            improved = true;
-            // İlk iyileştirmeyi kabul edip baştan başla (first-improvement).
-            break outer;
-          } else {
-            // geri al
-            order.remove(to);
-            order.add(from, moved);
-          }
-        }
-      }
-
-      if (!improved) break;
-    }
-
-    if (verbose) {
-      System.out.println("INFO: Order local-search evals=" + evals +
-          " window=" + window + " passes=" + passes +
-          " best=" + best.totalLateness + " baseline=" + baseline);
-    }
-    return best;
   }
 
 }

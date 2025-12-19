@@ -14,28 +14,11 @@ import java.util.Map;
 public final class Data {
   private Data() {}
 
-  public enum SchedulingMode {
-    /** Mevcut: proje seç -> proje içi tüm işleri yerleştir. */
-    PROJECT_BASED,
-    /** Yeni: tüm projelerden hazır job havuzu -> job seç -> yerleştir. */
-    JOB_BASED
-  }
+  /** Bu sürüm sade: sadece JOB_BASED + EDD. */
+  public enum SchedulingMode { JOB_BASED }
 
-  public enum ProjectDispatchRule {
-    /** Earliest Due Date (mevcut baseline). */
-    EDD,
-    /** Apparent Tardiness Cost (dinamik öncelik). */
-    ATC
-  }
-
-  public enum JobDispatchRule {
-    /** Proje due date bazlı EDD (job'larda proje due kullanılır). */
-    EDD,
-    /** Job-level ATC (tahmini start time üzerinden). */
-    ATC,
-    /** Minimum slack (due - start - p). */
-    MIN_SLACK
-  }
+  /** Bu sürüm sade: sadece EDD. */
+  public enum JobDispatchRule { EDD }
 
   /**
    * Pulldown sonrası \"Other Tests\" başlangıç kuralı.
@@ -45,33 +28,11 @@ public final class Data {
    */
   public static final boolean OTHER_TESTS_WAIT_FOR_ALL_PULLDOWNS = true;
 
-  /** Stage2 proje çizelgeleme sıralama kuralı. */
-  /** Varsayılan: EDD. Denemeler için Main argümanıyla değiştirilebilir. */
-  public static ProjectDispatchRule PROJECT_DISPATCH_RULE = ProjectDispatchRule.EDD;
-
-  /** ATC parametresi (tipik 2..4). */
-  public static double ATC_K = 3.0;
-
-  /** Scheduling mode: PROJECT_BASED veya JOB_BASED. */
+  /** Scheduling mode: sadece JOB_BASED. */
   public static SchedulingMode SCHEDULING_MODE = SchedulingMode.JOB_BASED;
 
-  /** Job-based dispatch kuralı. */
-  public static JobDispatchRule JOB_DISPATCH_RULE = JobDispatchRule.ATC;
-
-  /** Job-based ATC k parametresi. */
-  public static double JOB_ATC_K = 3.0;
-
-  /** EDD sırasını local search (adjacent swap) ile iyileştir. */
-  public static boolean ENABLE_ORDER_LOCAL_SEARCH = true;
-
-  /** Local search maksimum tur sayısı (adjacent swap pass). */
-  public static int ORDER_LS_MAX_PASSES = 2;
-
-  /** Local search hareket penceresi (insertion/move). Örn 5 => i konumundan i±5 arası denenir. */
-  public static int ORDER_LS_WINDOW = 5;
-
-  /** Local search toplam değerlendirme limiti (performans için). */
-  public static int ORDER_LS_MAX_EVALS = 2000;
+  /** Job-based dispatch kuralı: sadece EDD. */
+  public static JobDispatchRule JOB_DISPATCH_RULE = JobDispatchRule.EDD;
 
   /** Room env local search: oda setlerini schedule objective ile iyileştir. */
   public static boolean ENABLE_ROOM_LOCAL_SEARCH = true;

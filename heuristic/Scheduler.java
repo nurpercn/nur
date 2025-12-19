@@ -123,26 +123,8 @@ public final class Scheduler {
       chambers.add(new ChamberInstance(spec, env));
     }
 
-    if (Data.SCHEDULING_MODE == Data.SchedulingMode.JOB_BASED) {
-      EvalResult r = evaluateJobBased(projects, chambers);
-      return r;
-    }
-
-    // Varsayılan evaluator: dispatch rule'a göre proje seçimi (EDD/ATC).
-    List<Project> remaining = new ArrayList<>(projects.stream().map(Project::copy).toList());
-    int totalLateness = 0;
-    List<ProjectResult> results = new ArrayList<>();
-    List<ScheduledJob> schedule = new ArrayList<>();
-
-    while (!remaining.isEmpty()) {
-      Project p = pickNextProject(remaining, chambers);
-      ProjectSchedule ps = scheduleSingleProject(p, chambers);
-      totalLateness += ps.lateness;
-      results.add(new ProjectResult(p.id, ps.completionDay, p.dueDateDays, ps.lateness));
-      schedule.addAll(ps.jobs);
-    }
-
-    return new EvalResult(totalLateness, results, schedule);
+    // Sade sürüm: sadece JOB_BASED evaluator.
+    return evaluateJobBased(projects, chambers);
   }
 
   /** Job-based: tüm projelerden hazır job havuzu ile çizelgele. */
@@ -211,20 +193,8 @@ public final class Scheduler {
     double score() {
       // lower start and due pressure should win.
       int due = st.p.dueDateDays;
-      int p = test.durationDays;
-      int slack = due - start() - p;
-      if (Data.JOB_DISPATCH_RULE == Data.JobDispatchRule.EDD) {
-        // smaller due is better; tie-break by earlier start
-        return -due * 1e6 - start();
-      }
-      if (Data.JOB_DISPATCH_RULE == Data.JobDispatchRule.MIN_SLACK) {
-        return -slack * 1e6 - start();
-      }
-      // ATC
-      double k = Data.JOB_ATC_K <= 0 ? 3.0 : Data.JOB_ATC_K;
-      double pBar = st.avgRemainingDuration();
-      double expTerm = Math.exp(-(Math.max(0.0, slack)) / (k * Math.max(1.0, pBar)));
-      return (1.0 / Math.max(1.0, p)) * expTerm;
+      // EDD: smaller due is better; tie-break by earlier start
+      return -due * 1e6 - start();
     }
 
     boolean betterThan(Candidate other) {
@@ -315,21 +285,6 @@ public final class Scheduler {
     }
 
     int projectCompletion() { return completionMax; }
-
-    double avgRemainingDuration() {
-      int n = 0;
-      int sum = 0;
-      if (!gasScheduled) { sum += get("GAS_43").durationDays; n++; }
-      if (pulldownRequired) {
-        TestDef pd = get("PULLDOWN_43");
-        for (boolean b : pulldownScheduledBySample) {
-          if (!b) { sum += pd.durationDays; n++; }
-        }
-      }
-      for (TestDef t : remainingOthers) { sum += t.durationDays; n++; }
-      for (TestDef t : remainingCu) { sum += t.durationDays; n++; }
-      return n == 0 ? 1.0 : (sum / (double) n);
-    }
 
     Candidate bestReadyCandidate(List<ChamberInstance> chambers) {
       Candidate best = null;
@@ -424,230 +379,6 @@ public final class Scheduler {
         }
       }
     }
-  }
-
-  /** Verilen proje sırasını aynen kullanarak çizelgele. */
-  public EvalResult evaluateFixedOrder(List<Project> orderedProjects, Map<String, Env> chamberEnv) {
-    Objects.requireNonNull(orderedProjects);
-    Objects.requireNonNull(chamberEnv);
-
-    List<ChamberInstance> chambers = new ArrayList<>();
-    for (ChamberSpec spec : Data.CHAMBERS) {
-      Env env = chamberEnv.get(spec.id);
-      if (env == null) throw new IllegalArgumentException("Missing env for chamber " + spec.id);
-      if (env.humidity == Humidity.H85 && !spec.humidityAdjustable) {
-        throw new IllegalArgumentException("Chamber " + spec.id + " cannot be assigned to 85% humidity");
-      }
-      chambers.add(new ChamberInstance(spec, env));
-    }
-
-    int totalLateness = 0;
-    List<ProjectResult> results = new ArrayList<>();
-    List<ScheduledJob> schedule = new ArrayList<>();
-
-    for (Project p0 : orderedProjects) {
-      Project p = p0.copy();
-      ProjectSchedule ps = scheduleSingleProject(p, chambers);
-      totalLateness += ps.lateness;
-      results.add(new ProjectResult(p.id, ps.completionDay, p.dueDateDays, ps.lateness));
-      schedule.addAll(ps.jobs);
-    }
-
-    return new EvalResult(totalLateness, results, schedule);
-  }
-
-  private static final class ProjectSchedule {
-    final int completionDay;
-    final int lateness;
-    final List<ScheduledJob> jobs;
-
-    ProjectSchedule(int completionDay, int lateness, List<ScheduledJob> jobs) {
-      this.completionDay = completionDay;
-      this.lateness = lateness;
-      this.jobs = jobs;
-    }
-  }
-
-  private static ProjectSchedule scheduleSingleProject(Project p, List<ChamberInstance> chambers) {
-    int[] sampleAvail = new int[p.samples];
-    int projectCompletion = 0;
-    List<ScheduledJob> jobs = new ArrayList<>();
-
-      // 1) GAS
-      int gasEnd = 0;
-      if (isRequired(p, "GAS_43")) {
-        TestDef gas = get("GAS_43");
-        Assignment a = assignBest(chambers, p.needsVoltage, gas.env, gas.durationDays, 0, 0, sampleAvail);
-        gasEnd = a.end;
-        projectCompletion = Math.max(projectCompletion, a.end);
-        jobs.add(new ScheduledJob(p.id, gas.id, gas.category, gas.env, gas.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
-      }
-
-      // 2) PULLDOWN: S adet paralel job (sample başına 1)
-      int pulldownEnd = gasEnd;
-      if (isRequired(p, "PULLDOWN_43")) {
-        TestDef pd = get("PULLDOWN_43");
-        int maxEnd = gasEnd;
-        for (int s = 0; s < p.samples; s++) {
-          int earliest = Math.max(gasEnd, sampleAvail[s]);
-          Assignment a = assignBest(chambers, p.needsVoltage, pd.env, pd.durationDays, earliest, s, sampleAvail);
-          maxEnd = Math.max(maxEnd, a.end);
-          projectCompletion = Math.max(projectCompletion, a.end);
-          jobs.add(new ScheduledJob(p.id, pd.id, pd.category, pd.env, pd.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
-        }
-        pulldownEnd = maxEnd;
-      }
-
-      // 3) OTHER TESTS (Energy/Performance/Freezing/Temperature Rise)
-      List<TestDef> others = new ArrayList<>();
-      for (TestDef t : Data.TESTS) {
-        if (t.category == TestCategory.OTHER && isRequired(p, t.id)) others.add(t);
-      }
-
-      // Other testlerin faz başlangıcı: iki farklı yorum desteklenir.
-      // - WAIT_FOR_ALL_PULLDOWNS=true: tüm pulldown bitmeden other test başlamaz.
-      // - false: her sample kendi pulldown'u biter bitmez other test alabilir (sampleAvail bunu zaten zorlar).
-      int otherPhaseEarliest = Data.OTHER_TESTS_WAIT_FOR_ALL_PULLDOWNS ? pulldownEnd : gasEnd;
-
-      // List scheduling: her adımda (kalan testler içinden) en erken başlayabileni seç.
-      int maxStartOther = otherPhaseEarliest;
-      List<TestDef> remainingOtherTests = new ArrayList<>(others);
-      while (!remainingOtherTests.isEmpty()) {
-        Planned best = null;
-        int bestIdx = -1;
-        for (int i = 0; i < remainingOtherTests.size(); i++) {
-          TestDef t = remainingOtherTests.get(i);
-          Planned cand = planBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, otherPhaseEarliest, sampleAvail);
-          if (best == null
-              || cand.start < best.start
-              || (cand.start == best.start && cand.end < best.end)) {
-            best = cand;
-            bestIdx = i;
-          }
-        }
-        if (best == null || bestIdx < 0) {
-          throw new IllegalStateException("Failed to plan other test assignment for project " + p.id);
-        }
-
-        TestDef chosen = remainingOtherTests.remove(bestIdx);
-        apply(best, sampleAvail);
-        maxStartOther = Math.max(maxStartOther, best.start);
-        projectCompletion = Math.max(projectCompletion, best.end);
-        jobs.add(new ScheduledJob(
-            p.id, chosen.id, chosen.category, chosen.env, chosen.durationDays,
-            best.chamber.spec.id, best.stationIdx, best.sampleIdx, best.start, best.end
-        ));
-      }
-
-      // 4) CONSUMER USAGE: start >= maxStartOther
-      for (TestDef t : Data.TESTS) {
-        if (t.category != TestCategory.CONSUMER_USAGE) continue;
-        if (!isRequired(p, t.id)) continue;
-        int earliest = Math.max(otherPhaseEarliest, maxStartOther);
-        Assignment a = assignBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, earliest, sampleAvail);
-        projectCompletion = Math.max(projectCompletion, a.end);
-        jobs.add(new ScheduledJob(p.id, t.id, t.category, t.env, t.durationDays, a.chamber.spec.id, a.stationIdx, a.sampleIdx, a.start, a.end));
-      }
-
-    int lateness = Math.max(0, projectCompletion - p.dueDateDays);
-    return new ProjectSchedule(projectCompletion, lateness, jobs);
-  }
-
-  private static Project pickNextProject(List<Project> remaining, List<ChamberInstance> chambers) {
-    if (remaining.size() == 1) {
-      return remaining.remove(0);
-    }
-
-    if (Data.PROJECT_DISPATCH_RULE == Data.ProjectDispatchRule.EDD) {
-      int bestIdx = 0;
-      int bestDue = remaining.get(0).dueDateDays;
-      for (int i = 1; i < remaining.size(); i++) {
-        int d = remaining.get(i).dueDateDays;
-        if (d < bestDue) {
-          bestDue = d;
-          bestIdx = i;
-        }
-      }
-      return remaining.remove(bestIdx);
-    }
-
-    // ATC (Apparent Tardiness Cost) - dinamik: t, p, p_bar ile skorla.
-    double pBar = averageWork(remaining);
-    double k = Data.ATC_K <= 0 ? 3.0 : Data.ATC_K;
-
-    int bestIdx = 0;
-    double bestScore = Double.NEGATIVE_INFINITY;
-    int bestDue = Integer.MAX_VALUE;
-    for (int i = 0; i < remaining.size(); i++) {
-      Project p = remaining.get(i);
-      int t = earliestProjectStart(p, chambers);
-      double proc = Math.max(1.0, estimatedWork(p));
-      double slack = p.dueDateDays - t - proc;
-      double urgency = Math.max(0.0, -slack); // tardy/near-tardy -> larger
-      // ATC skor: 1/proc * exp( - max(0, slack) / (k * pBar) )
-      double expTerm = Math.exp(-(Math.max(0.0, slack)) / (k * Math.max(1.0, pBar)));
-      double score = (1.0 / proc) * expTerm + 1e-9 * urgency;
-
-      if (score > bestScore || (score == bestScore && p.dueDateDays < bestDue)) {
-        bestScore = score;
-        bestIdx = i;
-        bestDue = p.dueDateDays;
-      }
-    }
-
-    return remaining.remove(bestIdx);
-  }
-
-  /** Projenin ilk başlayabileceği tahmini en erken zaman (ATC için). */
-  private static int earliestProjectStart(Project p, List<ChamberInstance> chambers) {
-    // İlk test env: Gas varsa Gas env, yoksa Pulldown env, yoksa herhangi bir required test env.
-    Env firstEnv = null;
-    Integer gasIdx = Data.TEST_INDEX.get("GAS_43");
-    if (gasIdx != null && p.required[gasIdx]) firstEnv = Data.TESTS.get(gasIdx).env;
-    if (firstEnv == null) {
-      Integer pdIdx = Data.TEST_INDEX.get("PULLDOWN_43");
-      if (pdIdx != null && p.required[pdIdx]) firstEnv = Data.TESTS.get(pdIdx).env;
-    }
-    if (firstEnv == null) {
-      for (int ti = 0; ti < Data.TESTS.size(); ti++) {
-        if (p.required[ti]) { firstEnv = Data.TESTS.get(ti).env; break; }
-      }
-    }
-    if (firstEnv == null) return 0;
-
-    int best = Integer.MAX_VALUE;
-    for (ChamberInstance ch : chambers) {
-      if (!ch.env.equals(firstEnv)) continue;
-      if (p.needsVoltage && !ch.spec.voltageCapable) continue;
-      for (int a : ch.stationAvail) {
-        if (a < best) best = a;
-      }
-    }
-    return best == Integer.MAX_VALUE ? 0 : best;
-  }
-
-  private static double averageWork(List<Project> ps) {
-    double sum = 0.0;
-    for (Project p : ps) sum += estimatedWork(p);
-    return ps.isEmpty() ? 1.0 : (sum / ps.size());
-  }
-
-  /**
-   * Proje iş yükü tahmini (ATC için): tüm required test süreleri + pulldown (S*dur) + CU testleri.
-   * Bu sadece öncelik hesabı içindir; gerçek completion hesaplaması scheduler tarafından yapılır.
-   */
-  private static double estimatedWork(Project p) {
-    double w = 0.0;
-    for (int ti = 0; ti < Data.TESTS.size(); ti++) {
-      if (!p.required[ti]) continue;
-      TestDef t = Data.TESTS.get(ti);
-      if (t.category == TestCategory.PULLDOWN) {
-        w += (double) p.samples * t.durationDays;
-      } else {
-        w += t.durationDays;
-      }
-    }
-    return w;
   }
 
   private static boolean isRequired(Project p, String testId) {
