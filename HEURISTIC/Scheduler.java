@@ -67,30 +67,6 @@ public final class Scheduler {
       this.env = env;
       this.stationAvail = new int[spec.stations];
     }
-
-    int bestStartAtOrAfter(int earliest) {
-      int best = Integer.MAX_VALUE;
-      for (int a : stationAvail) {
-        best = Math.min(best, Math.max(a, earliest));
-      }
-      return best;
-    }
-  }
-
-  private static final class Assignment {
-    final ChamberInstance chamber;
-    final int stationIdx;
-    final int sampleIdx;
-    final int start;
-    final int end;
-
-    Assignment(ChamberInstance chamber, int stationIdx, int sampleIdx, int start, int end) {
-      this.chamber = chamber;
-      this.stationIdx = stationIdx;
-      this.sampleIdx = sampleIdx;
-      this.start = start;
-      this.end = end;
-    }
   }
 
   private static final class Planned {
@@ -177,18 +153,15 @@ public final class Scheduler {
     final JobKind kind;
     final TestDef test;
     final Planned planned;
-    final int release;
 
-    Candidate(ProjectState st, JobKind kind, TestDef test, Planned planned, int release) {
+    Candidate(ProjectState st, JobKind kind, TestDef test, Planned planned) {
       this.st = st;
       this.kind = kind;
       this.test = test;
       this.planned = planned;
-      this.release = release;
     }
 
     int start() { return planned.start; }
-    int end() { return planned.end; }
 
     double score() {
       // lower start and due pressure should win.
@@ -294,7 +267,7 @@ public final class Scheduler {
         TestDef gas = get("GAS_43");
         int release = 0;
         Planned pl = planBestOverSamples(chambers, p.needsVoltage, gas.env, gas.durationDays, release, sampleAvail);
-        best = new Candidate(this, JobKind.GAS, gas, pl, release);
+        best = new Candidate(this, JobKind.GAS, gas, pl);
       }
 
       // PULLDOWN ready after gas
@@ -305,7 +278,7 @@ public final class Scheduler {
           int release = gasEnd;
           int earliest = Math.max(release, sampleAvail[s]);
           Planned pl = planBestSingleSample(chambers, p.needsVoltage, pd.env, pd.durationDays, earliest, s);
-          Candidate c = new Candidate(this, JobKind.PULLDOWN, pd, pl, release);
+          Candidate c = new Candidate(this, JobKind.PULLDOWN, pd, pl);
           if (best == null || c.betterThan(best)) best = c;
         }
       }
@@ -324,7 +297,7 @@ public final class Scheduler {
             release = gasEnd;
           }
           Planned pl = planBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, release, sampleAvail);
-          Candidate c = new Candidate(this, JobKind.OTHER, t, pl, release);
+          Candidate c = new Candidate(this, JobKind.OTHER, t, pl);
           if (best == null || c.betterThan(best)) best = c;
         }
       }
@@ -337,7 +310,7 @@ public final class Scheduler {
           int release = Math.max(maxStartOther, (pulldownRequired ? pulldownEndMax : gasEnd));
           for (TestDef t : remainingCu) {
             Planned pl = planBestOverSamples(chambers, p.needsVoltage, t.env, t.durationDays, release, sampleAvail);
-            Candidate c = new Candidate(this, JobKind.CU, t, pl, release);
+            Candidate c = new Candidate(this, JobKind.CU, t, pl);
             if (best == null || c.betterThan(best)) best = c;
           }
         }
@@ -390,68 +363,6 @@ public final class Scheduler {
     Integer idx = Data.TEST_INDEX.get(testId);
     if (idx == null) throw new IllegalArgumentException("Unknown test id: " + testId);
     return Data.TESTS.get(idx);
-  }
-
-  private static Assignment assignBestOverSamples(
-      List<ChamberInstance> chambers,
-      boolean needsVoltage,
-      Env env,
-      int duration,
-      int earliest,
-      int[] sampleAvail
-  ) {
-    Assignment best = null;
-    for (int s = 0; s < sampleAvail.length; s++) {
-      int e = Math.max(earliest, sampleAvail[s]);
-      Assignment cand = assignBest(chambers, needsVoltage, env, duration, e, s, sampleAvail);
-      if (best == null) {
-        best = cand;
-      } else if (cand.start < best.start || (cand.start == best.start && cand.end < best.end)) {
-        best = cand;
-      }
-    }
-    if (best == null) throw new IllegalStateException("No samples available");
-    return best;
-  }
-
-  private static Assignment assignBest(
-      List<ChamberInstance> chambers,
-      boolean needsVoltage,
-      Env env,
-      int duration,
-      int earliest,
-      int sampleIdx,
-      int[] sampleAvail
-  ) {
-    ChamberInstance bestCh = null;
-    int bestStation = -1;
-    int bestStart = Integer.MAX_VALUE;
-
-    for (ChamberInstance ch : chambers) {
-      if (!ch.env.equals(env)) continue;
-      if (needsVoltage && !ch.spec.voltageCapable) continue;
-
-      for (int i = 0; i < ch.stationAvail.length; i++) {
-        int st = Math.max(ch.stationAvail[i], earliest);
-        if (st < bestStart) {
-          bestStart = st;
-          bestCh = ch;
-          bestStation = i;
-        }
-      }
-    }
-
-    if (bestCh == null) {
-      throw new IllegalStateException("No eligible chamber for env=" + env + " needsVoltage=" + needsVoltage);
-    }
-
-    int start = bestStart;
-    int end = start + duration;
-
-    bestCh.stationAvail[bestStation] = end;
-    sampleAvail[sampleIdx] = end;
-
-    return new Assignment(bestCh, bestStation, sampleIdx, start, end);
   }
 
   private static Planned planBestOverSamples(
