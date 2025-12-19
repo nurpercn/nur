@@ -142,10 +142,6 @@ public final class Main {
           // ignore invalid
         }
       }
-      if (a != null && a.startsWith("--sampleIncrease=")) {
-        String v = a.substring("--sampleIncrease=".length()).trim();
-        Data.ENABLE_SAMPLE_INCREASE = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
-      }
     }
     HeuristicSolver solver = new HeuristicSolver(verbose);
     List<Solution> sols = solver.solve();
