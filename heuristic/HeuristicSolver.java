@@ -394,7 +394,8 @@ public final class HeuristicSolver {
         .toList();
     order = new ArrayList<>(order);
 
-    Scheduler.EvalResult best = scheduler.evaluateFixedOrder(order, room);
+    // Uyumluluk: bazı Scheduler sürümlerinde evaluateFixedOrder yok (JOB_BASED sade sürüm).
+    Scheduler.EvalResult best = scheduler.evaluate(order, room);
     int passes = Math.max(1, Data.ORDER_LS_MAX_PASSES);
     int window = Math.max(1, Data.ORDER_LS_WINDOW);
     int maxEvals = Math.max(50, Data.ORDER_LS_MAX_EVALS);
@@ -416,7 +417,7 @@ public final class HeuristicSolver {
           Project moved = order.remove(from);
           order.add(to, moved);
 
-          Scheduler.EvalResult cand = scheduler.evaluateFixedOrder(order, room);
+          Scheduler.EvalResult cand = scheduler.evaluate(order, room);
           evals++;
 
           if (cand.totalLateness < best.totalLateness) {
