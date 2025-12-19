@@ -17,7 +17,7 @@ public final class Project {
     this.dueDateDays = dueDateDays;
     this.needsVoltage = needsVoltage;
     this.required = Objects.requireNonNull(required);
-    if (samples <= 0) throw new IllegalArgumentException("samples must be positive");
+    if (samples < Data.SAMPLE_MIN) throw new IllegalArgumentException("samples must be >= " + Data.SAMPLE_MIN);
     this.samples = samples;
   }
 

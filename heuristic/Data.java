@@ -94,18 +94,8 @@ public final class Data {
   /** Başlangıç sample sayısı (tüm projeler için). */
   public static int INITIAL_SAMPLES = 3;
 
-  /** Sample artırma heuristiğini kapat/aç. */
-  public static boolean ENABLE_SAMPLE_INCREASE = false;
-
-  public enum SampleSearchStrategy {
-    /** Eski greedy: tek projeyi +1 dene, en iyisini al, iyileşme yoksa dur. */
-    GREEDY_1STEP,
-    /** Daha güçlü: 1-step iyileşme yoksa 2-step (iki projeyi aynı anda +1) de dener. */
-    GREEDY_1STEP_THEN_2STEP
-  }
-
-  /** Sample artırma arama stratejisi. */
-  public static SampleSearchStrategy SAMPLE_SEARCH_STRATEGY = SampleSearchStrategy.GREEDY_1STEP_THEN_2STEP;
+  /** Minimum sample sayısı (heuristic bu alt sınırın altına inmez). */
+  public static int SAMPLE_MIN = 2;
 
   /** Sample üst sınırı (kontrolsüz büyümeyi engeller). */
   public static int SAMPLE_MAX = 8;
@@ -278,7 +268,9 @@ public final class Data {
 
   /** Projeleri doğrudan matristen üretir. */
   public static List<Project> buildProjects(int initialSamples) {
-    if (initialSamples <= 0) throw new IllegalArgumentException("initialSamples must be positive");
+    if (initialSamples < SAMPLE_MIN) {
+      throw new IllegalArgumentException("initialSamples must be >= " + SAMPLE_MIN);
+    }
 
     validateMatrix();
 
