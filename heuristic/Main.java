@@ -141,10 +141,29 @@ public final class Main {
         } catch (NumberFormatException ignored) {
           // ignore invalid
         }
+      } else if ("--samples".equalsIgnoreCase(a)) {
+        // next token is samples if present
+        if (idx + 1 < args.length) {
+          try {
+            Data.INITIAL_SAMPLES = Integer.parseInt(args[idx + 1].trim());
+            idx++;
+          } catch (NumberFormatException ignored) {
+            // ignore invalid
+          }
+        }
       }
       if (a != null && a.startsWith("--sampleIncrease=")) {
         String v = a.substring("--sampleIncrease=".length()).trim();
         Data.ENABLE_SAMPLE_INCREASE = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+      } else if ("--sampleIncrease".equalsIgnoreCase(a)) {
+        // allow both: --sampleIncrease (means true) OR --sampleIncrease true/false
+        if (idx + 1 < args.length && args[idx + 1] != null && !args[idx + 1].startsWith("--")) {
+          String v = args[idx + 1].trim();
+          Data.ENABLE_SAMPLE_INCREASE = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+          idx++;
+        } else {
+          Data.ENABLE_SAMPLE_INCREASE = true;
+        }
       }
     }
 
