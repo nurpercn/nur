@@ -135,6 +135,17 @@ public final class Main {
         String v = a.substring("--validate=".length()).trim();
         Data.ENABLE_SCHEDULE_VALIDATION = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
       }
+      if (a != null && a.startsWith("--samples=")) {
+        try {
+          Data.INITIAL_SAMPLES = Integer.parseInt(a.substring("--samples=".length()).trim());
+        } catch (NumberFormatException ignored) {
+          // ignore invalid
+        }
+      }
+      if (a != null && a.startsWith("--sampleIncrease=")) {
+        String v = a.substring("--sampleIncrease=".length()).trim();
+        Data.ENABLE_SAMPLE_INCREASE = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+      }
     }
     HeuristicSolver solver = new HeuristicSolver(verbose);
     List<Solution> sols = solver.solve();

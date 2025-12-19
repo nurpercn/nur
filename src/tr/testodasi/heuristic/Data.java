@@ -91,6 +91,12 @@ public final class Data {
   /** Schedule doğrulama (ihlal varsa exception). */
   public static boolean ENABLE_SCHEDULE_VALIDATION = true;
 
+  /** Başlangıç sample sayısı (tüm projeler için). */
+  public static int INITIAL_SAMPLES = 3;
+
+  /** Sample artırma heuristiğini kapat/aç. */
+  public static boolean ENABLE_SAMPLE_INCREASE = false;
+
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
   public static final int DUE_DATE_OFFSET_DAYS = 0;
 

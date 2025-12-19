@@ -23,7 +23,7 @@ public final class HeuristicSolver {
   }
 
   public List<Solution> solve() {
-    List<Project> projects = Data.buildProjects(2);
+    List<Project> projects = Data.buildProjects(Data.INITIAL_SAMPLES);
 
     List<Solution> solutions = new ArrayList<>();
     Map<String, Env> prevRoom = null;
@@ -57,7 +57,7 @@ public final class HeuristicSolver {
       }
 
       // Stage2: EDD scheduling + sample artırma
-      List<Project> improved = stage2_increaseSamples(room, current);
+      List<Project> improved = Data.ENABLE_SAMPLE_INCREASE ? stage2_increaseSamples(room, current) : deepCopy(current);
       Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
 
       // Ek iyileştirme: proje sırasını local search ile iyileştir (EDD tabanlı).
