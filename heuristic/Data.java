@@ -98,7 +98,7 @@ public final class Data {
   public static int INITIAL_SAMPLES = 2;
 
   /** Sample artırma heuristiğini kapat/aç. */
-  public static boolean ENABLE_SAMPLE_INCREASE = false;
+  public static boolean ENABLE_SAMPLE_INCREASE = true;
 
   /** Sample üst sınırı (kontrolsüz büyümeyi engeller). */
   public static int SAMPLE_MAX = 8;
