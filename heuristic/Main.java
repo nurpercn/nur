@@ -147,6 +147,12 @@ public final class Main {
         Data.ENABLE_SAMPLE_INCREASE = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
       }
     }
+
+    // Enforce global minimum samples
+    if (Data.INITIAL_SAMPLES < Data.MIN_SAMPLES) {
+      Data.INITIAL_SAMPLES = Data.MIN_SAMPLES;
+    }
+
     HeuristicSolver solver = new HeuristicSolver(verbose);
     List<Solution> sols = solver.solve();
 

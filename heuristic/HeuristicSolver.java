@@ -226,6 +226,11 @@ public final class HeuristicSolver {
   private List<Project> stage2_increaseSamples(Map<String, Env> room, List<Project> startProjects) {
     List<Project> current = deepCopy(startProjects);
 
+    // enforce minimum samples
+    for (Project p : current) {
+      if (p.samples < Data.MIN_SAMPLES) p.samples = Data.MIN_SAMPLES;
+    }
+
     Scheduler.EvalResult baseEval = scheduler.evaluate(current, room);
     if (verbose) {
       System.out.println("INFO: Stage2 initial total lateness = " + baseEval.totalLateness);
@@ -233,89 +238,64 @@ public final class HeuristicSolver {
 
     int evalBudget = Math.max(500, Data.SAMPLE_SEARCH_MAX_EVALS);
     int evals = 0;
+    int passes = 0;
 
-    while (true) {
-      int bestImprovement = 0;
-      int bestProjectIdx = -1;
-      Scheduler.EvalResult bestEval = null;
+    // Per-project local search: try +1, +2, -1, -2 and accept best (min lateness).
+    // Tie-break: if lateness equal, prefer fewer samples (keeps solution minimal).
+    while (evals < evalBudget) {
+      boolean improvedAny = false;
+      passes++;
 
-      for (int i = 0; i < current.size(); i++) {
-        if (evals >= evalBudget) break;
-        List<Project> cand = deepCopy(current);
-        cand.get(i).samples += 1;
-        if (cand.get(i).samples > Data.SAMPLE_MAX) continue;
+      for (int i = 0; i < current.size() && evals < evalBudget; i++) {
+        Project p0 = current.get(i);
+        int curSamples = p0.samples;
 
-        Scheduler.EvalResult e = scheduler.evaluate(cand, room);
-        evals++;
-        int improvement = baseEval.totalLateness - e.totalLateness;
-        if (improvement > bestImprovement) {
-          bestImprovement = improvement;
-          bestProjectIdx = i;
-          bestEval = e;
-        }
-      }
+        int bestSamples = curSamples;
+        Scheduler.EvalResult bestEval = baseEval;
 
-      if (bestImprovement <= 0 || bestProjectIdx < 0 || bestEval == null) {
-        // 1-step iyileşme yoksa 2-step lookahead dene (iki projeyi aynı anda +1).
-        if (Data.SAMPLE_SEARCH_STRATEGY == Data.SampleSearchStrategy.GREEDY_1STEP_THEN_2STEP && evals < evalBudget) {
-          int best2Improvement = 0;
-          int bestI = -1, bestJ = -1;
-          Scheduler.EvalResult best2Eval = null;
+        int[] deltas = new int[]{+1, +2, -1, -2};
+        for (int d : deltas) {
+          if (evals >= evalBudget) break;
+          int ns = curSamples + d;
+          if (ns < Data.MIN_SAMPLES) continue;
+          if (ns > Data.SAMPLE_MAX) continue;
+          if (ns == curSamples) continue;
 
-          for (int i = 0; i < current.size() && evals < evalBudget; i++) {
-            for (int j = i + 1; j < current.size() && evals < evalBudget; j++) {
-              List<Project> cand = deepCopy(current);
-              cand.get(i).samples += 1;
-              cand.get(j).samples += 1;
-              if (cand.get(i).samples > Data.SAMPLE_MAX || cand.get(j).samples > Data.SAMPLE_MAX) continue;
-              Scheduler.EvalResult e = scheduler.evaluate(cand, room);
-              evals++;
-              int improvement = baseEval.totalLateness - e.totalLateness;
-              if (improvement > best2Improvement) {
-                best2Improvement = improvement;
-                bestI = i;
-                bestJ = j;
-                best2Eval = e;
-              }
-            }
-          }
+          List<Project> cand = deepCopy(current);
+          cand.get(i).samples = ns;
+          Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+          evals++;
 
-          if (best2Improvement > 0 && best2Eval != null) {
-            current.get(bestI).samples += 1;
-            current.get(bestJ).samples += 1;
-            baseEval = best2Eval;
-            if (verbose) {
-              System.out.println("INFO: Stage2 accept +1 sample (2-step) => " +
-                  current.get(bestI).id + " samples=" + current.get(bestI).samples + ", " +
-                  current.get(bestJ).id + " samples=" + current.get(bestJ).samples +
-                  " improvement=" + best2Improvement +
-                  " newTotal=" + best2Eval.totalLateness);
-            }
-            continue;
+          if (e.totalLateness < bestEval.totalLateness ||
+              (e.totalLateness == bestEval.totalLateness && ns < bestSamples)) {
+            bestEval = e;
+            bestSamples = ns;
           }
         }
 
-        if (verbose) {
-          System.out.println("INFO: Stage2 no further improvement. Final total lateness = " + baseEval.totalLateness);
+        boolean accept =
+            bestEval.totalLateness < baseEval.totalLateness ||
+                (bestEval.totalLateness == baseEval.totalLateness && bestSamples < curSamples);
+
+        if (accept && bestSamples != curSamples) {
+          p0.samples = bestSamples;
+          baseEval = bestEval;
+          improvedAny = true;
+          if (verbose) {
+            System.out.println("INFO: Stage2 accept sample move => " + p0.id +
+                " " + curSamples + " -> " + bestSamples +
+                " totalLateness=" + baseEval.totalLateness);
+          }
         }
-        break;
       }
 
-      current.get(bestProjectIdx).samples += 1;
-      if (verbose) {
-        Project p = current.get(bestProjectIdx);
-        System.out.println(
-            "INFO: Stage2 accept +1 sample => " + p.id +
-                " samples=" + p.samples +
-                " improvement=" + bestImprovement +
-                " newTotal=" + bestEval.totalLateness
-        );
-      }
-      baseEval = bestEval;
+      if (!improvedAny) break;
+      if (passes > 200) break; // safety
     }
 
     if (verbose) {
-      System.out.println("INFO: Stage2 sample-search evals=" + evals + " budget=" + evalBudget);
+      System.out.println("INFO: Stage2 sample-search passes=" + passes + " evals=" + evals + " budget=" + evalBudget +
+          " finalTotal=" + baseEval.totalLateness);
     }
     return current;
   }

@@ -91,6 +91,9 @@ public final class Data {
   /** Schedule doğrulama (ihlal varsa exception). */
   public static boolean ENABLE_SCHEDULE_VALIDATION = true;
 
+  /** Min sample sayısı (her proje için). */
+  public static final int MIN_SAMPLES = 2;
+
   /** Başlangıç sample sayısı (tüm projeler için). */
   public static int INITIAL_SAMPLES = 3;
 
@@ -112,9 +115,6 @@ public final class Data {
 
   /** Sample artırma toplam deneme bütçesi (değerlendirme sayısı). */
   public static int SAMPLE_SEARCH_MAX_EVALS = 8000;
-
-  /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
-  public static final int DUE_DATE_OFFSET_DAYS = 0;
 
   // Test sırasi: ekrandaki kolon sırasını takip eder.
   public static final List<TestDef> TESTS = List.of(
@@ -279,20 +279,21 @@ public final class Data {
   /** Projeleri doğrudan matristen üretir. */
   public static List<Project> buildProjects(int initialSamples) {
     if (initialSamples <= 0) throw new IllegalArgumentException("initialSamples must be positive");
+    int samples = Math.max(MIN_SAMPLES, initialSamples);
 
     validateMatrix();
 
     List<Project> projects = new ArrayList<>();
     for (int r = 0; r < PROJECT_MATRIX.length; r++) {
       String id = "P" + (r + 1);
-      int due = DUE_DATES[r] + DUE_DATE_OFFSET_DAYS;
+      int due = DUE_DATES[r];
       boolean needsVolt = NEEDS_VOLT[r] == 1;
 
       boolean[] req = new boolean[TESTS.size()];
       for (int c = 0; c < TESTS.size(); c++) {
         req[c] = PROJECT_MATRIX[r][c] == 1;
       }
-      projects.add(new Project(id, due, needsVolt, req, initialSamples));
+      projects.add(new Project(id, due, needsVolt, req, samples));
     }
 
     return projects;
