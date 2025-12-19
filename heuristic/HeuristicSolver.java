@@ -253,7 +253,9 @@ public final class HeuristicSolver {
         int bestSamples = curSamples;
         Scheduler.EvalResult bestEval = baseEval;
 
-        int[] deltas = new int[]{+1, +2, -1, -2};
+        int[] deltas = (curSamples <= Data.MIN_SAMPLES)
+            ? new int[]{+1, +2}
+            : new int[]{+1, +2, -1, -2};
         for (int d : deltas) {
           if (evals >= evalBudget) break;
           int ns = curSamples + d;

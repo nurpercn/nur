@@ -95,7 +95,7 @@ public final class Data {
   public static final int MIN_SAMPLES = 2;
 
   /** Başlangıç sample sayısı (tüm projeler için). */
-  public static int INITIAL_SAMPLES = 3;
+  public static int INITIAL_SAMPLES = 2;
 
   /** Sample artırma heuristiğini kapat/aç. */
   public static boolean ENABLE_SAMPLE_INCREASE = false;
