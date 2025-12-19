@@ -61,7 +61,10 @@ public final class HeuristicSolver {
       Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
 
       // Ek iyileştirme: proje sırasını local search ile iyileştir (EDD tabanlı).
-      if (Data.ENABLE_ORDER_LOCAL_SEARCH && Data.PROJECT_DISPATCH_RULE == Data.ProjectDispatchRule.EDD) {
+      // Not: JOB_BASED modda "sabit proje sırası" kavramı yok; bu yüzden sadece PROJECT_BASED iken uygula.
+      if (Data.SCHEDULING_MODE == Data.SchedulingMode.PROJECT_BASED &&
+          Data.ENABLE_ORDER_LOCAL_SEARCH &&
+          Data.PROJECT_DISPATCH_RULE == Data.ProjectDispatchRule.EDD) {
         Scheduler.EvalResult lsEval = improveOrderByLocalSearch(improved, room, eval.totalLateness);
         if (lsEval.totalLateness < eval.totalLateness) {
           if (verbose) {

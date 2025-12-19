@@ -231,7 +231,7 @@ public final class Main {
     System.out.println("ITERATION " + s.iteration);
     System.out.println("Total lateness = " + s.totalLateness);
 
-    System.out.println("\nChamber setpoints (fixed for this iteration):");
+    System.out.println("\nChamber setpoints (for this iteration):");
     for (var c : Data.CHAMBERS) {
       Env env = s.chamberEnv.get(c.id);
       System.out.println("- " + c.id + " stations=" + c.stations + " volt=" + c.voltageCapable + " humAdj=" + c.humidityAdjustable + " => " + env);
