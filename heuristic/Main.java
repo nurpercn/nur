@@ -172,6 +172,15 @@ public final class Main {
       Data.INITIAL_SAMPLES = Data.MIN_SAMPLES;
     }
 
+    if (verbose) {
+      System.out.println("INFO: Effective options:");
+      System.out.println("- INITIAL_SAMPLES=" + Data.INITIAL_SAMPLES + " (MIN_SAMPLES=" + Data.MIN_SAMPLES + ")");
+      System.out.println("- ENABLE_SAMPLE_INCREASE=" + Data.ENABLE_SAMPLE_INCREASE);
+      System.out.println("- SAMPLE_MAX=" + Data.SAMPLE_MAX + " SAMPLE_SEARCH_MAX_EVALS=" + Data.SAMPLE_SEARCH_MAX_EVALS);
+      System.out.println("- SCHEDULING_MODE=" + Data.SCHEDULING_MODE + " PROJECT_DISPATCH_RULE=" + Data.PROJECT_DISPATCH_RULE + " JOB_DISPATCH_RULE=" + Data.JOB_DISPATCH_RULE);
+      System.out.println("- ENABLE_ROOM_LOCAL_SEARCH=" + Data.ENABLE_ROOM_LOCAL_SEARCH + " ENABLE_ORDER_LOCAL_SEARCH=" + Data.ENABLE_ORDER_LOCAL_SEARCH);
+    }
+
     HeuristicSolver solver = new HeuristicSolver(verbose);
     List<Solution> sols = solver.solve();
 
