@@ -85,33 +85,14 @@ public final class Data {
   /** Room local search: move hamlesini dene (oda env değiştir). */
   public static boolean ROOM_LS_ENABLE_MOVE = true;
 
-  /** Room LS scoring: sample artırmayı da dahil et (daha pahalı). */
-  public static boolean ROOM_LS_INCLUDE_SAMPLE_HEURISTIC = false;
-
   /** Schedule doğrulama (ihlal varsa exception). */
   public static boolean ENABLE_SCHEDULE_VALIDATION = true;
 
-  /** Başlangıç sample sayısı (tüm projeler için). */
-  public static int INITIAL_SAMPLES = 3;
-
-  /** Sample artırma heuristiğini kapat/aç. */
-  public static boolean ENABLE_SAMPLE_INCREASE = false;
-
-  public enum SampleSearchStrategy {
-    /** Eski greedy: tek projeyi +1 dene, en iyisini al, iyileşme yoksa dur. */
-    GREEDY_1STEP,
-    /** Daha güçlü: 1-step iyileşme yoksa 2-step (iki projeyi aynı anda +1) de dener. */
-    GREEDY_1STEP_THEN_2STEP
-  }
-
-  /** Sample artırma arama stratejisi. */
-  public static SampleSearchStrategy SAMPLE_SEARCH_STRATEGY = SampleSearchStrategy.GREEDY_1STEP_THEN_2STEP;
-
-  /** Sample üst sınırı (kontrolsüz büyümeyi engeller). */
-  public static int SAMPLE_MAX = 8;
-
-  /** Sample artırma toplam deneme bütçesi (değerlendirme sayısı). */
-  public static int SAMPLE_SEARCH_MAX_EVALS = 8000;
+  /**
+   * HEURISTIC 3 SAMPLE sadeleştirmesi:
+   * Bu projede sample sayısı sabittir ve artırılmaz.
+   */
+  public static final int FIXED_SAMPLES = 3;
 
   /** Tüm projelerin due date'ine eklenecek sabit offset (gün). */
   public static final int DUE_DATE_OFFSET_DAYS = 0;
@@ -276,10 +257,8 @@ public final class Data {
       new ChamberSpec("T028", 12, true, false, true)
   );
 
-  /** Projeleri doğrudan matristen üretir. */
-  public static List<Project> buildProjects(int initialSamples) {
-    if (initialSamples <= 0) throw new IllegalArgumentException("initialSamples must be positive");
-
+  /** Projeleri doğrudan matristen üretir. Sample sayısı sabit = {@link #FIXED_SAMPLES}. */
+  public static List<Project> buildProjects() {
     validateMatrix();
 
     List<Project> projects = new ArrayList<>();
@@ -292,7 +271,7 @@ public final class Data {
       for (int c = 0; c < TESTS.size(); c++) {
         req[c] = PROJECT_MATRIX[r][c] == 1;
       }
-      projects.add(new Project(id, due, needsVolt, req, initialSamples));
+      projects.add(new Project(id, due, needsVolt, req, FIXED_SAMPLES));
     }
 
     return projects;
