@@ -9,7 +9,7 @@ public final class Project {
   public final boolean needsVoltage;
   /** required[i] corresponds to Data.TESTS.get(i) */
   public final boolean[] required;
-  public int samples;
+  public final int samples;
 
   public Project(String id, int dueDateDays, boolean needsVoltage, boolean[] required, int samples) {
     this.id = Objects.requireNonNull(id);
