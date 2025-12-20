@@ -179,22 +179,48 @@ public final class Data {
 
 
   /** Proje bazlı voltaj ihtiyacı (Excel NeedsVolt kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
-	public static final int[] NEEDS_VOLT = new int[]{
-		    0, 1, 0, 0, 1, 0, 0, 0, 1, 0,
-		    0, 0, 0, 1, 0, 0, 0, 1, 0, 0,
-		    0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
-		    0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-		    1, 0, 0, 0, 0, 0, 0, 1, 0, 0
-		};
+  // Scenario selector (for experiments in the paper):
+  // - VOLT_SCENARIO=1 => 10 adet "1"
+  // - VOLT_SCENARIO=2 => 17 adet "1"
+  // - VOLT_SCENARIO=3 => 25 adet "1"
+  //
+  // Not: Bu dosyada tek bir NEEDS_VOLT dizisi olmalı; senaryoları aşağıdaki sabit belirler.
+  private static final int VOLT_SCENARIO = 3;
+
+  public static final int[] NEEDS_VOLT = switch (VOLT_SCENARIO) {
+    case 1 -> new int[]{
+        0, 1, 0, 0, 1, 0, 0, 0, 1, 0,
+        0, 0, 0, 1, 0, 0, 0, 1, 0, 0,
+        0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
+        0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        1, 0, 0, 0, 0, 0, 0, 1, 0, 0
+    };
+    case 2 -> new int[]{
+        1, 0, 0, 1, 0, 1, 0, 1, 0, 0,
+        0, 1, 0, 0, 1, 0, 0, 0, 1, 0,
+        1, 0, 0, 1, 0, 0, 0, 1, 0, 1,
+        0, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+        0, 0, 0, 1, 0, 1, 0, 0, 0, 1
+    };
+    case 3 -> new int[]{
+        0, 1, 1, 0, 1, 0, 1, 0, 1, 1,
+        0, 1, 0, 1, 0, 1, 0, 1, 0, 1,
+        1, 0, 1, 0, 1, 0, 1, 0, 1, 0,
+        1, 1, 0, 0, 1, 0, 1, 0, 1, 0,
+        1, 0, 1, 0, 0, 1, 0, 0, 1, 0
+    };
+    default -> throw new IllegalStateException("Unknown VOLT_SCENARIO=" + VOLT_SCENARIO);
+  };
 
   /** Proje bazlı due date (Excel due date kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
-	public static final int[] DUE_DATES = new int[]{
-		    90, 40, 120, 45, 70, 50, 110, 55, 80, 40,
-		    100, 45, 75, 50, 95, 40, 105, 45, 60, 50,
-		    85, 40, 45, 55, 65, 40, 50, 45, 40, 55,
-		    45, 50, 40, 45, 40, 55, 50, 45, 40, 50,
-		    45, 40, 55, 40, 45, 40, 50, 40, 40, 40
-		};
+  // Scenario: UNIFORM 40..120 aralığına dengeli dağılmış (karışık sırada)
+  public static final int[] DUE_DATES = new int[]{
+      70, 115, 45, 100, 55, 120, 80, 95, 40, 110,
+      60, 85, 50, 105, 65, 90, 75, 115, 45, 100,
+      55, 40, 80, 95, 110, 60, 85, 50, 105, 65,
+      90, 75, 115, 45, 100, 55, 40, 80, 95, 110,
+      60, 85, 50, 105, 65, 90, 75, 70, 120, 70
+  };
 
 
   public static final List<ChamberSpec> CHAMBERS = List.of(
