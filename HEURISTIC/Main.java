@@ -293,6 +293,105 @@ public final class Main {
       projectById.put(p.id, p);
     }
 
+    // 0) Console-style summaries (so "konsolda yazanlar" also exist under csv_out)
+    // 0.a) Projects (sample counts)
+    Path projectsCsv = dir.resolve("projects.csv");
+    try (BufferedWriter w = Files.newBufferedWriter(projectsCsv)) {
+      w.write("iteration,projectId,samples,dueDateDays,needsVoltage");
+      w.newLine();
+      sol.projects.stream()
+          .sorted(Comparator.comparing(p -> p.id))
+          .forEach(p -> {
+            try {
+              w.write(sol.iteration + "," + p.id + "," + p.samples + "," + p.dueDateDays + "," + p.needsVoltage);
+              w.newLine();
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          });
+    }
+
+    // 0.b) Project results (completion/lateness)
+    Path resultsCsv = dir.resolve("project_results.csv");
+    try (BufferedWriter w = Files.newBufferedWriter(resultsCsv)) {
+      w.write("iteration,projectId,completionDay,dueDateDays,lateness,samples,needsVoltage");
+      w.newLine();
+      sol.results.stream()
+          .sorted(Comparator.comparing(r -> r.projectId))
+          .forEach(r -> {
+            Project p = projectById.get(r.projectId);
+            try {
+              w.write(sol.iteration + "," + r.projectId + "," + r.completionDay + "," + r.dueDate + "," + r.lateness + "," +
+                  (p != null ? p.samples : "") + "," + (p != null && p.needsVoltage));
+              w.newLine();
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          });
+    }
+
+    // 0.c) Chamber setpoints (env assignment per chamber)
+    Path chambersCsv = dir.resolve("chamber_setpoints.csv");
+    try (BufferedWriter w = Files.newBufferedWriter(chambersCsv)) {
+      w.write("iteration,chamberId,stations,voltageCapable,humidityAdjustable,tempC,humidity");
+      w.newLine();
+      for (ChamberSpec c : Data.CHAMBERS) {
+        Env env = sol.chamberEnv.get(c.id);
+        if (env == null) continue;
+        w.write(sol.iteration + "," + c.id + "," + c.stations + "," + c.voltageCapable + "," + c.humidityAdjustable + "," +
+            env.temperatureC + "," + env.humidity);
+        w.newLine();
+      }
+    }
+
+    // 0.d) Text dump similar to console sections
+    Path consoleDump = dir.resolve("console_dump.txt");
+    try (BufferedWriter w = Files.newBufferedWriter(consoleDump)) {
+      w.write("====================");
+      w.newLine();
+      w.write("ITERATION " + sol.iteration);
+      w.newLine();
+      w.write("Total lateness = " + sol.totalLateness);
+      w.newLine();
+      w.newLine();
+
+      w.write("Chamber setpoints (for this iteration):");
+      w.newLine();
+      for (ChamberSpec c : Data.CHAMBERS) {
+        Env env = sol.chamberEnv.get(c.id);
+        w.write("- " + c.id + " stations=" + c.stations + " volt=" + c.voltageCapable + " humAdj=" + c.humidityAdjustable + " => " + env);
+        w.newLine();
+      }
+      w.newLine();
+
+      w.write("Project sample counts:");
+      w.newLine();
+      sol.projects.stream()
+          .sorted(Comparator.comparing(p -> p.id))
+          .forEach(p -> {
+            try {
+              w.write("- " + p.id + " samples=" + p.samples + " due=" + p.dueDateDays + " needsVolt=" + p.needsVoltage);
+              w.newLine();
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          });
+      w.newLine();
+
+      w.write("Project results:");
+      w.newLine();
+      sol.results.stream()
+          .sorted(Comparator.comparing(r -> r.projectId))
+          .forEach(r -> {
+            try {
+              w.write("- " + r.projectId + " completion=" + r.completionDay + " due=" + r.dueDate + " lateness=" + r.lateness);
+              w.newLine();
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          });
+    }
+
     // 1) By project
     Path byProject = dir.resolve("schedule_by_project.csv");
     try (BufferedWriter w = Files.newBufferedWriter(byProject)) {
