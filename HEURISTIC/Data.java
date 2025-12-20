@@ -185,7 +185,10 @@ public final class Data {
   // - VOLT_SCENARIO=3 => 25 adet "1"
   //
   // Not: Bu dosyada tek bir NEEDS_VOLT dizisi olmalı; senaryoları aşağıdaki sabit belirler.
-  private static final int VOLT_SCENARIO = 3;
+  // You can override at runtime:
+  //   java -DvoltScenario=3 -cp out tr.testodasi.heuristic.Main
+  // Default: 1
+  private static final int VOLT_SCENARIO = Integer.getInteger("voltScenario", 1);
 
   public static final int[] NEEDS_VOLT = switch (VOLT_SCENARIO) {
     case 1 -> new int[]{
