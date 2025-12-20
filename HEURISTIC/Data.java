@@ -9,7 +9,7 @@ import java.util.Map;
  * Tüm veriler kodun içindedir.
  *
  * Not: Proje matriksi Excel'deki gibi 0/1 tablo olarak aşağıda tutulur.
- * Yeni instance denemek için sadece {@link #PROJECT_MATRIX}, {@link #NEEDS_VOLT}, {@link #DUE_DATES} dizilerini değiştirmeniz yeterli.
+ * Yeni instance denemek için sadece {@link #PROJECT_MATRIX}, {@link #NEEDS_VOLT} ve due date profili/parametrelerini değiştirmeniz yeterli.
  */
 public final class Data {
   private Data() {}
@@ -19,6 +19,18 @@ public final class Data {
 
   /** Bu sürüm sade: sadece EDD. */
   public enum JobDispatchRule { EDD }
+
+  /** Due date senaryosu seçimi. */
+  public enum DueDateProfile {
+    /** Eldeki (eski) sabit dizi. */
+    BASE,
+    /** Uniform (eşit aralıklı) due date: min..max lineer yayılır. */
+    UNIFORM,
+    /** Uniform ama geniş aralık: pseudo-random uniform[min,max]. */
+    WIDE,
+    /** Uniform ama dar aralık: pseudo-random uniform[min,max]. */
+    NARROW
+  }
 
   /**
    * Pulldown sonrası \"Other Tests\" başlangıç kuralı.
@@ -66,6 +78,24 @@ public final class Data {
 
   /** Sample artırma toplam deneme bütçesi (değerlendirme sayısı). */
   public static int SAMPLE_SEARCH_MAX_EVALS = 8000;
+
+  /** Due date profili seçimi (default: BASE). */
+  public static DueDateProfile DUE_DATE_PROFILE = DueDateProfile.BASE;
+
+  /** UNIFORM profili parametreleri (lineer). */
+  public static int DUE_UNIFORM_MIN = 50;
+  public static int DUE_UNIFORM_MAX = 120;
+
+  /** WIDE profili parametreleri (uniform geniş aralık). */
+  public static int DUE_WIDE_MIN = 30;
+  public static int DUE_WIDE_MAX = 180;
+
+  /** NARROW profili parametreleri (uniform dar aralık). */
+  public static int DUE_NARROW_MIN = 80;
+  public static int DUE_NARROW_MAX = 110;
+
+  /** WIDE/NARROW için deterministik seed (tekrar üretilebilir). */
+  public static long DUE_RANDOM_SEED = 42L;
 
   // Test sırasi: ekrandaki kolon sırasını takip eder.
   public static final List<TestDef> TESTS = List.of(
@@ -186,14 +216,67 @@ public final class Data {
       1, 1, 0, 0, 1, 1, 0, 0, 1, 0
   };
 
-  /** Proje bazlı due date (Excel due date kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
-  public static final int[] DUE_DATES = new int[]{
+  /** Eski/base due date dizisi (Excel due date kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
+  public static final int[] DUE_DATES_BASE = new int[]{
       60, 50, 95, 120, 50, 70, 50, 60, 95, 120,
       50, 70, 30, 60, 95, 120, 50, 70, 30, 60,
       95, 120, 50, 70, 30, 60, 95, 120, 50, 70,
       30, 60, 95, 120, 50, 70, 60, 95, 120, 50,
       70, 30, 60, 95, 120, 50, 70, 30, 60, 95
   };
+
+  private static DueDateProfile cachedProfile = null;
+  private static int cachedN = -1;
+  private static int[] cachedDueDates = null;
+
+  /** Aktif due date dizisini döndürür (profile'a göre deterministik üretir). */
+  public static int[] dueDates() {
+    int n = PROJECT_MATRIX.length;
+    if (cachedDueDates != null && cachedProfile == DUE_DATE_PROFILE && cachedN == n) {
+      return cachedDueDates;
+    }
+    cachedProfile = DUE_DATE_PROFILE;
+    cachedN = n;
+    cachedDueDates = switch (DUE_DATE_PROFILE) {
+      case BASE -> DUE_DATES_BASE;
+      case UNIFORM -> linearDueDates(n, DUE_UNIFORM_MIN, DUE_UNIFORM_MAX);
+      case WIDE -> uniformRandomDueDates(n, DUE_WIDE_MIN, DUE_WIDE_MAX, DUE_RANDOM_SEED);
+      case NARROW -> uniformRandomDueDates(n, DUE_NARROW_MIN, DUE_NARROW_MAX, DUE_RANDOM_SEED);
+    };
+    return cachedDueDates;
+  }
+
+  private static int[] linearDueDates(int n, int min, int max) {
+    if (n <= 0) return new int[0];
+    if (min > max) throw new IllegalArgumentException("linearDueDates: min > max");
+    int[] out = new int[n];
+    if (n == 1) {
+      out[0] = min;
+      return out;
+    }
+    for (int i = 0; i < n; i++) {
+      // round to nearest int to keep endpoints stable
+      double t = i / (double) (n - 1);
+      out[i] = (int) Math.round(min + (max - min) * t);
+    }
+    return out;
+  }
+
+  private static int[] uniformRandomDueDates(int n, int min, int max, long seed) {
+    if (n <= 0) return new int[0];
+    if (min > max) throw new IllegalArgumentException("uniformRandomDueDates: min > max");
+    int[] out = new int[n];
+    long s = seed;
+    int bound = (max - min) + 1;
+    for (int i = 0; i < n; i++) {
+      // simple deterministic LCG (not crypto) - repeatable across runs/JDKs
+      s = s * 6364136223846793005L + 1442695040888963407L;
+      long x = (s >>> 1); // make non-negative-ish
+      int r = (int) (x % bound);
+      out[i] = min + r;
+    }
+    return out;
+  }
 
   public static final List<ChamberSpec> CHAMBERS = List.of(
       // id, stations, tempAdj, humAdj, voltAdj (voltCapable)
@@ -233,11 +316,12 @@ public final class Data {
     int samples = Math.max(MIN_SAMPLES, initialSamples);
 
     validateMatrix();
+    int[] dues = dueDates();
 
     List<Project> projects = new ArrayList<>();
     for (int r = 0; r < PROJECT_MATRIX.length; r++) {
       String id = "P" + (r + 1);
-      int due = DUE_DATES[r];
+      int due = dues[r];
       boolean needsVolt = NEEDS_VOLT[r] == 1;
 
       boolean[] req = new boolean[TESTS.size()];
@@ -260,9 +344,10 @@ public final class Data {
       throw new IllegalStateException("NEEDS_VOLT length must match PROJECT_MATRIX rows. " +
           "NEEDS_VOLT=" + NEEDS_VOLT.length + " rows=" + PROJECT_MATRIX.length);
     }
-    if (DUE_DATES.length != PROJECT_MATRIX.length) {
-      throw new IllegalStateException("DUE_DATES length must match PROJECT_MATRIX rows. " +
-          "DUE_DATES=" + DUE_DATES.length + " rows=" + PROJECT_MATRIX.length);
+    int[] dues = dueDates();
+    if (dues.length != PROJECT_MATRIX.length) {
+      throw new IllegalStateException("Due dates length must match PROJECT_MATRIX rows. " +
+          "dueDates=" + dues.length + " rows=" + PROJECT_MATRIX.length + " profile=" + DUE_DATE_PROFILE);
     }
     for (int r = 0; r < PROJECT_MATRIX.length; r++) {
       if (PROJECT_MATRIX[r].length != TESTS.size()) {
@@ -272,8 +357,8 @@ public final class Data {
       if (NEEDS_VOLT[r] != 0 && NEEDS_VOLT[r] != 1) {
         throw new IllegalStateException("NEEDS_VOLT[" + r + "] must be 0/1");
       }
-      if (DUE_DATES[r] < 0) {
-        throw new IllegalStateException("DUE_DATES[" + r + "] must be >= 0");
+      if (dues[r] < 0) {
+        throw new IllegalStateException("Due dates[" + r + "] must be >= 0 (profile=" + DUE_DATE_PROFILE + ")");
       }
       for (int c = 0; c < PROJECT_MATRIX[r].length; c++) {
         int v = PROJECT_MATRIX[r][c];
