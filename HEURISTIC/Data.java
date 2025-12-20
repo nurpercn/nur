@@ -228,6 +228,17 @@ public final class Data {
       {1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1}  // P50
   };
 
+  /**
+   * Active matrix selector (runtime):
+   * -DmatrixScenario=1 => PROJECT_MATRIX_PREV
+   * -DmatrixScenario=2 => PROJECT_MATRIX_V9
+   * -DmatrixScenario=3 => PROJECT_MATRIX_LATEST (default)
+   *
+   * Not: Sohbette paylaştığınız 10 matrisi otomatik koşturabilmek için tüm matrislerin
+   * bu dosyada ayrı sabitler olarak bulunması gerekir.
+   */
+  private static final int MATRIX_SCENARIO = Integer.getInteger("matrixScenario", 3);
+
   public static final int[][] PROJECT_MATRIX_LATEST = new int[][]{
       // Gas PD EE32 EE25 EE16 P25 P43 P38 P32 P16 P10 Frz TR CU10 CU25 CU32
       // G  P 32 25 16 P25 P43 P38 P32 P16 P10 Frz TR C10 C25 C32
@@ -288,7 +299,12 @@ public final class Data {
   };
 
   // Active matrix for current experiments:
-  public static final int[][] PROJECT_MATRIX = PROJECT_MATRIX_LATEST;
+  public static final int[][] PROJECT_MATRIX = switch (MATRIX_SCENARIO) {
+    case 1 -> PROJECT_MATRIX_PREV;
+    case 2 -> PROJECT_MATRIX_V9;
+    case 3 -> PROJECT_MATRIX_LATEST;
+    default -> throw new IllegalStateException("Unknown matrixScenario=" + MATRIX_SCENARIO);
+  };
 
 
   /** Proje bazlı voltaj ihtiyacı (Excel NeedsVolt kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
@@ -301,32 +317,48 @@ public final class Data {
   // You can override at runtime:
   //   java -DvoltScenario=3 -cp out tr.testodasi.heuristic.Main
   // Default: 1
+  // Override to force all-1 or all-0 NEEDS_VOLT:
+  // -DvoltAll=1 => all projects need voltage
+  // -DvoltAll=0 => no project needs voltage
+  private static final int VOLT_ALL = Integer.getInteger("voltAll", -1);
+
   private static final int VOLT_SCENARIO = Integer.getInteger("voltScenario", 1);
 
-  public static final int[] NEEDS_VOLT = switch (VOLT_SCENARIO) {
-    case 1 -> new int[]{
-        0, 1, 0, 0, 1, 0, 0, 0, 1, 0,
-        0, 0, 0, 1, 0, 0, 0, 1, 0, 0,
-        0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
-        0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
-        1, 0, 0, 0, 0, 0, 0, 1, 0, 0
+  public static final int[] NEEDS_VOLT = switch (VOLT_ALL) {
+    case 0 -> allVolt(0);
+    case 1 -> allVolt(1);
+    case -1 -> switch (VOLT_SCENARIO) {
+      case 1 -> new int[]{
+          0, 1, 0, 0, 1, 0, 0, 0, 1, 0,
+          0, 0, 0, 1, 0, 0, 0, 1, 0, 0,
+          0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
+          0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+          1, 0, 0, 0, 0, 0, 0, 1, 0, 0
+      };
+      case 2 -> new int[]{
+          1, 0, 0, 1, 0, 1, 0, 1, 0, 0,
+          0, 1, 0, 0, 1, 0, 0, 0, 1, 0,
+          1, 0, 0, 1, 0, 0, 0, 1, 0, 1,
+          0, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+          0, 0, 0, 1, 0, 1, 0, 0, 0, 1
+      };
+      case 3 -> new int[]{
+          0, 1, 1, 0, 1, 0, 1, 0, 1, 1,
+          0, 1, 0, 1, 0, 1, 0, 1, 0, 1,
+          1, 0, 1, 0, 1, 0, 1, 0, 1, 0,
+          1, 1, 0, 0, 1, 0, 1, 0, 1, 0,
+          1, 0, 1, 0, 0, 1, 0, 0, 1, 0
+      };
+      default -> throw new IllegalStateException("Unknown voltScenario=" + VOLT_SCENARIO);
     };
-    case 2 -> new int[]{
-        1, 0, 0, 1, 0, 1, 0, 1, 0, 0,
-        0, 1, 0, 0, 1, 0, 0, 0, 1, 0,
-        1, 0, 0, 1, 0, 0, 0, 1, 0, 1,
-        0, 0, 0, 1, 0, 0, 1, 0, 0, 1,
-        0, 0, 0, 1, 0, 1, 0, 0, 0, 1
-    };
-    case 3 -> new int[]{
-        0, 1, 1, 0, 1, 0, 1, 0, 1, 1,
-        0, 1, 0, 1, 0, 1, 0, 1, 0, 1,
-        1, 0, 1, 0, 1, 0, 1, 0, 1, 0,
-        1, 1, 0, 0, 1, 0, 1, 0, 1, 0,
-        1, 0, 1, 0, 0, 1, 0, 0, 1, 0
-    };
-    default -> throw new IllegalStateException("Unknown VOLT_SCENARIO=" + VOLT_SCENARIO);
+    default -> throw new IllegalStateException("voltAll must be -1/0/1 but was " + VOLT_ALL);
   };
+
+  private static int[] allVolt(int v) {
+    int[] a = new int[PROJECT_MATRIX.length];
+    for (int i = 0; i < a.length; i++) a[i] = v;
+    return a;
+  }
 
   /** Proje bazlı due date (Excel due date kolonu). Satır sayısı PROJECT_MATRIX ile aynı olmalı. */
   // Due-date scenario selector (for experiments):

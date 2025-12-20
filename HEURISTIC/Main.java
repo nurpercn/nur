@@ -210,6 +210,8 @@ public final class Main {
   private static void printSummary(Solution best) {
     int dueScenario = Integer.getInteger("dueScenario", 1);
     int voltScenario = Integer.getInteger("voltScenario", 1);
+    int voltAll = Integer.getInteger("voltAll", -1);
+    int matrixScenario = Integer.getInteger("matrixScenario", 3);
 
     int totalSamples = 0;
     for (Project p : best.projects) totalSamples += p.samples;
@@ -223,8 +225,10 @@ public final class Main {
 
     System.out.println(
         "SUMMARY " +
+            "matrixScenario=" + matrixScenario + " " +
             "dueScenario=" + dueScenario + " " +
             "voltScenario=" + voltScenario + " " +
+            "voltAll=" + voltAll + " " +
             "bestIter=" + best.iteration + " " +
             "totalLateness=" + best.totalLateness + " " +
             "totalSamples=" + totalSamples + " " +
