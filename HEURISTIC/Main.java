@@ -23,10 +23,14 @@ public final class Main {
     String csvDir = null;
     boolean csvFlag = false;
     boolean diagnose = false;
+    boolean summaryOnly = false;
     for (int idx = 0; idx < args.length; idx++) {
       String a = args[idx];
       if ("--verbose".equalsIgnoreCase(a) || "-v".equalsIgnoreCase(a)) {
         verbose = true;
+      }
+      if ("--summary".equalsIgnoreCase(a) || "--summaryOnly".equalsIgnoreCase(a)) {
+        summaryOnly = true;
       }
       if (a != null && a.startsWith("--dumpProject=")) {
         dumpProjectId = a.substring("--dumpProject=".length()).trim();
@@ -158,6 +162,11 @@ public final class Main {
 
     Solution best = sols.stream().min(Comparator.comparingInt(s -> s.totalLateness)).orElseThrow();
 
+    if (summaryOnly) {
+      printSummary(best);
+      return;
+    }
+
     for (Solution s : sols) {
       printSolution(s);
       System.out.println();
@@ -196,6 +205,33 @@ public final class Main {
     if (diagnose) {
       printDiagnostics(best);
     }
+  }
+
+  private static void printSummary(Solution best) {
+    int dueScenario = Integer.getInteger("dueScenario", 1);
+    int voltScenario = Integer.getInteger("voltScenario", 1);
+
+    int totalSamples = 0;
+    for (Project p : best.projects) totalSamples += p.samples;
+
+    int tardyProjects = 0;
+    for (ProjectResult r : best.results) {
+      if (r.lateness > 0) tardyProjects++;
+    }
+
+    UtilizationSummary util = computeUtilization(best);
+
+    System.out.println(
+        "SUMMARY " +
+            "dueScenario=" + dueScenario + " " +
+            "voltScenario=" + voltScenario + " " +
+            "bestIter=" + best.iteration + " " +
+            "totalLateness=" + best.totalLateness + " " +
+            "totalSamples=" + totalSamples + " " +
+            "tardyProjects=" + tardyProjects + " " +
+            "horizonDays=" + util.horizonDays + " " +
+            "avgChamberUtilization=" + fmt(util.avgChamberUtilization)
+    );
   }
 
   private static void printSolution(Solution s) {
