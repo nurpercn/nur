@@ -148,6 +148,11 @@ public final class Main {
       Data.INITIAL_SAMPLES = Data.MIN_SAMPLES;
     }
 
+    // Hard-lock samples to 3 for this study (ignore CLI overrides)
+    Data.INITIAL_SAMPLES = 3;
+    Data.ENABLE_SAMPLE_INCREASE = false;
+    Data.SAMPLE_MAX = 3;
+
     if (verbose) {
       System.out.println("INFO: Effective options:");
       System.out.println("- INITIAL_SAMPLES=" + Data.INITIAL_SAMPLES + " (MIN_SAMPLES=" + Data.MIN_SAMPLES + ")");

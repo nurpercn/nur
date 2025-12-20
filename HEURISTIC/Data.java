@@ -52,17 +52,33 @@ public final class Data {
   /** Schedule doğrulama (ihlal varsa exception). */
   public static boolean ENABLE_SCHEDULE_VALIDATION = true;
 
-  /** Min sample sayısı (her proje için). */
-  public static final int MIN_SAMPLES = 2;
+  /**
+   * Min sample sayısı (her proje için).
+   *
+   * Bu çalışma için sample sayısı sabit 3 olacak şekilde kilitlendi.
+   */
+  public static final int MIN_SAMPLES = 3;
 
-  /** Başlangıç sample sayısı (tüm projeler için). */
-  public static int INITIAL_SAMPLES = 2;
+  /**
+   * Başlangıç sample sayısı (tüm projeler için).
+   *
+   * Bu çalışma için sample sayısı sabit 3 olacak şekilde kilitlendi.
+   */
+  public static int INITIAL_SAMPLES = 3;
 
-  /** Sample artırma heuristiğini kapat/aç. */
-  public static boolean ENABLE_SAMPLE_INCREASE = true;
+  /**
+   * Sample artırma/azaltma heuristiği.
+   *
+   * Bu çalışma için kapalı: sample sayısı sabit 3.
+   */
+  public static boolean ENABLE_SAMPLE_INCREASE = false;
 
-  /** Sample üst sınırı (kontrolsüz büyümeyi engeller). */
-  public static int SAMPLE_MAX = 8;
+  /**
+   * Sample üst sınırı.
+   *
+   * Bu çalışma için sample sayısı sabit 3.
+   */
+  public static int SAMPLE_MAX = 3;
 
   /** Sample artırma toplam deneme bütçesi (değerlendirme sayısı). */
   public static int SAMPLE_SEARCH_MAX_EVALS = 8000;
