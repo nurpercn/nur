@@ -1,0 +1,316 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\title{HEURISTIC --- Pseudocode (EN)}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\noindent
+This document is an English, Overleaf-ready pseudocode summary of the Java implementation under \texttt{HEURISTIC/}:
+
+\begin{itemize}
+  \item \textbf{Outer loop}: \texttt{HeuristicSolver.solve()}
+  \item \textbf{Set assignment (room/env assignment)}: \texttt{HeuristicSolver.stage1\_assignRooms(...)}
+  \item \textbf{Scheduling (JOB\_BASED + EDD)}: \texttt{Scheduler.evaluateJobBased(...)}
+  \item \textbf{Sample increase (local search)}: \texttt{HeuristicSolver.stage2\_increaseSamples(...)}
+\end{itemize}
+
+\section{Outer Loop (Iterative Heuristic)}
+
+\begin{algorithm}[H]
+\caption{Solve (outer loop)}
+\begin{algorithmic}[1]
+\Procedure{Solve}{}
+  \State $projects \gets \Call{BuildProjects}{INITIAL\_SAMPLES}$
+  \State $solutions \gets [\ ]$
+  \State $prevRoom \gets \textbf{null}$
+  \State $current \gets \Call{DeepCopy}{projects}$
+
+  \For{$iter \gets 1$ \textbf{to} $5$}
+    \State $room \gets \Call{Stage1AssignRooms}{current}$
+
+    \If{$ENABLE\_ROOM\_LOCAL\_SEARCH$}
+      \State $base \gets \Call{ScoreRoom}{room, current}$ \Comment{$base.totalLateness$}
+      \State $improved \gets \Call{ImproveRoomsByLocalSearch}{current, room, base.totalLateness}$
+      \State $after \gets \Call{ScoreRoom}{improved, current}$
+      \If{$after.totalLateness < base.totalLateness$}
+        \State $room \gets improved$
+      \EndIf
+    \EndIf
+
+    \If{$prevRoom \neq \textbf{null}$ \textbf{and} $prevRoom = room$}
+      \State \textbf{break} \Comment{fixed point: room set unchanged}
+    \EndIf
+
+    \If{$ENABLE\_SAMPLE\_INCREASE$}
+      \State $improvedProjects \gets \Call{Stage2IncreaseSamples}{room, current}$
+    \Else
+      \State $improvedProjects \gets \Call{DeepCopy}{current}$
+    \EndIf
+
+    \State $eval \gets \Call{SchedulerEvaluate}{improvedProjects, room}$
+    \State $solutions.\Call{Add}{Solution(iter, eval.totalLateness, improvedProjects, room, eval.projectResults, eval.schedule)}$
+
+    \If{$ENABLE\_SCHEDULE\_VALIDATION$}
+      \State $violations \gets \Call{ValidateSchedule}{improvedProjects, room, eval.schedule}$
+      \State \Call{Assert}{$violations$ is empty}
+    \EndIf
+
+    \State $prevRoom \gets room$
+    \State $current \gets \Call{DeepCopy}{improvedProjects}$
+  \EndFor
+
+  \State \Return $solutions$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\section{Stage 1 --- Set Assignment (Room/Env Assignment)}
+
+\noindent
+\textbf{Goal:} assign each chamber (room) exactly one environment \texttt{Env} (temperature + humidity), such that:
+\begin{itemize}
+  \item every \emph{demanded} environment gets at least one room;
+  \item environments demanded by \emph{voltage-required} projects have at least one \emph{voltage-capable} room;
+  \item environments with \texttt{H85} humidity can only be assigned to \texttt{humidityAdjustable=true} chambers.
+\end{itemize}
+
+\noindent
+\textbf{Demand model:} for each required test $t$ in a project $p$:
+\begin{itemize}
+  \item jobs$=1$ for GAS / OTHER / CU,
+  \item jobs$=p.samples$ for PULLDOWN (one job per sample),
+  \item work contribution $w =$ jobs $\times t.durationDays$.
+\end{itemize}
+
+\begin{algorithm}[H]
+\caption{Stage 1: assign rooms to environments}
+\begin{algorithmic}[1]
+\Procedure{Stage1AssignRooms}{$projects$}
+  \State $demanded \gets \emptyset$
+  \State $demandTotal[\cdot] \gets 0$ \Comment{env $\to$ job-days}
+  \State $demandVolt[\cdot] \gets 0$  \Comment{env $\to$ job-days (only needsVoltage projects)}
+
+  \For{\textbf{each} project $p$ in $projects$}
+    \For{\textbf{each} test $t$ in $TESTS$}
+      \If{$p$ requires $t$}
+        \State $jobs \gets (t.category = PULLDOWN)\ ?\ p.samples : 1$
+        \State $w \gets jobs \cdot t.durationDays$
+        \State $demandTotal[t.env] \gets demandTotal[t.env] + w$
+        \If{$p.needsVoltage$}
+          \State $demandVolt[t.env] \gets demandVolt[t.env] + w$
+        \EndIf
+        \State $demanded \gets demanded \cup \{t.env\}$
+      \EndIf
+    \EndFor
+  \EndFor
+  \State \Call{Assert}{$demanded \neq \emptyset$}
+
+  \State $assignedStationsTotal[\cdot] \gets 0$ \Comment{env $\to$ stations}
+  \State $assignedStationsVolt[\cdot] \gets 0$  \Comment{env $\to$ stations (voltage rooms only)}
+
+  \State $voltRooms \gets$ voltage-capable chambers sorted by stations descending
+  \State $nonVoltRooms \gets$ non-voltage chambers sorted by stations descending
+  \State $assignment[chamberId] \gets \textbf{null}$
+
+  \Comment{(1) assign voltage-capable rooms first (primary demand = voltage demand)}
+  \For{\textbf{each} chamber $c$ in $voltRooms$}
+    \State $env \gets \Call{PickBestEnv}{c, demanded, demandVolt, demandTotal, assignedStationsVolt, assignedStationsTotal, \textbf{true}}$
+    \State $assignment[c.id] \gets env$
+    \State $assignedStationsTotal[env] \gets assignedStationsTotal[env] + c.stations$
+    \State $assignedStationsVolt[env] \gets assignedStationsVolt[env] + c.stations$
+  \EndFor
+
+  \Comment{(2) assign non-voltage rooms (use total demand)}
+  \For{\textbf{each} chamber $c$ in $nonVoltRooms$}
+    \State $env \gets \Call{PickBestEnv}{c, demanded, demandTotal, demandTotal, assignedStationsTotal, assignedStationsTotal, \textbf{false}}$
+    \State $assignment[c.id] \gets env$
+    \State $assignedStationsTotal[env] \gets assignedStationsTotal[env] + c.stations$
+  \EndFor
+
+  \Comment{(3) repair: each voltage-demanded env must have at least one voltage-capable room}
+  \For{\textbf{each} env in $demanded$}
+    \If{$demandVolt[env] > 0$ \textbf{and} $assignedStationsVolt[env] = 0$}
+      \State $ch^\star \gets$ choose a voltage-capable chamber to reassign to $env$
+      \State \Call{Assert}{humidity feasibility holds for $ch^\star$ and $env$}
+      \State $assignment[ch^\star.id] \gets env$
+    \EndIf
+  \EndFor
+
+  \Comment{(4) repair: each demanded env must appear at least once}
+  \For{\textbf{each} env in $demanded$}
+    \If{$demandTotal[env] > 0$ \textbf{and} $env \notin assignment.values$}
+      \State $ch^\star \gets$ choose a chamber to flip with minimal damage
+      \State \Call{Assert}{humidity feasibility holds for $ch^\star$ and $env$}
+      \State $assignment[ch^\star.id] \gets env$
+    \EndIf
+  \EndFor
+
+  \State \Return $assignment$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{PickBestEnv (load-balancing score)}
+\begin{algorithmic}[1]
+\Procedure{PickBestEnv}{$chamber, envCandidates, primaryDemand, fallbackDemand, primaryAssignedStations, totalAssignedStations, prioritizePrimary$}
+  \State $best \gets \textbf{null}$; $bestScore \gets -\infty$
+  \For{\textbf{each} env in $envCandidates$}
+    \If{$env.humidity = H85$ \textbf{and} $chamber.humidityAdjustable = false$}
+      \State \textbf{continue}
+    \EndIf
+    \State $d_1 \gets primaryDemand[env]$; $d_2 \gets fallbackDemand[env]$
+    \State $demand \gets (prioritizePrimary \wedge d_1>0)\ ?\ d_1 : d_2$
+    \State $assigned \gets prioritizePrimary\ ?\ primaryAssignedStations[env] : totalAssignedStations[env]$
+    \State $score \gets \dfrac{demand}{assigned + 1}$
+    \If{$score > bestScore$}
+      \State $bestScore \gets score$; $best \gets env$
+    \EndIf
+  \EndFor
+  \State \Call{Assert}{$best \neq \textbf{null}$}
+  \State \Return $best$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\section{Scheduling (JOB\_BASED + EDD Dispatch)}
+
+\noindent
+\textbf{Goal:} given fixed room environments, schedule all jobs on chamber stations, obeying:
+\begin{itemize}
+  \item station capacity (no overlaps on the same chamber station),
+  \item sample capacity (within a project, a sample cannot run two tests at once),
+  \item compatibility constraints (env match, humidity feasibility, voltage feasibility),
+  \item precedence constraints: GAS $\rightarrow$ PULLDOWN $\rightarrow$ OTHER $\rightarrow$ CU,
+  \item dispatch rule: \textbf{EDD} (earliest due date wins; tie-break by earlier feasible start).
+\end{itemize}
+
+\begin{algorithm}[H]
+\caption{EvaluateJobBased (global EDD selection of ready jobs)}
+\begin{algorithmic}[1]
+\Procedure{EvaluateJobBased}{$projects, chamberEnv$}
+  \State $chambers \gets$ build chamber instances with $env=chamberEnv[ch.id]$ and $stationAvail[\cdot]=0$
+  \State $stateByProject \gets$ map each project $p$ to a new \texttt{ProjectState(p)}
+  \State $schedule \gets [\ ]$
+
+  \While{\textbf{true}}
+    \State $best \gets \textbf{null}$
+    \For{\textbf{each} project state $st$ in $stateByProject$}
+      \State $cand \gets \Call{BestReadyCandidate}{st, chambers}$
+      \If{$cand = \textbf{null}$} \State \textbf{continue} \EndIf
+      \If{$best = \textbf{null}$ \textbf{or} $\Call{BetterThan}{cand, best}$}
+        \State $best \gets cand$
+      \EndIf
+    \EndFor
+    \If{$best = \textbf{null}$}
+      \State \textbf{break} \Comment{no remaining jobs}
+    \EndIf
+
+    \Comment{apply the chosen plan: update station + sample availability}
+    \State $best.planned.chamber.stationAvail[best.planned.stationIdx] \gets best.planned.end$
+    \State $best.st.sampleAvail[best.planned.sampleIdx] \gets best.planned.end$
+    \State \Call{OnScheduled}{best.st, best.kind, best.test, best.planned}
+    \State $schedule.\Call{Add}{best \rightarrow \texttt{ScheduledJob}}$
+  \EndWhile
+
+  \Comment{compute total lateness}
+  \State $totalLateness \gets 0$; $results \gets [\ ]$
+  \For{\textbf{each} state $st$ in $stateByProject$}
+    \State $completion \gets st.completionMax$
+    \State $lateness \gets \max(0, completion - st.p.dueDateDays)$
+    \State $totalLateness \gets totalLateness + lateness$
+    \State $results.\Call{Add}{ProjectResult(st.p.id, completion, st.p.dueDateDays, lateness)}$
+  \EndFor
+
+  \State \Return $(totalLateness, results, schedule)$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\noindent
+\textbf{Candidate scoring (EDD):} the Java code uses a lexicographic preference equivalent to minimizing due date, then minimizing feasible start time.
+\[
+\text{score}(cand) = -(\text{dueDate} \cdot 10^{6}) - \text{startTime}.
+\]
+
+\section{Stage 2 --- Sample Increase (Per-Project Local Search)}
+
+\noindent
+\textbf{Goal:} with fixed room assignment, tune each project's sample count to reduce total lateness.
+
+\noindent
+\textbf{Constraints:} $samples \in [MIN\_SAMPLES, SAMPLE\_MAX]$ and a maximum evaluation budget of
+$\max(500, SAMPLE\_SEARCH\_MAX\_EVALS)$ calls to the scheduler.
+
+\begin{algorithm}[H]
+\caption{Stage 2: sample-count local search}
+\begin{algorithmic}[1]
+\Procedure{Stage2IncreaseSamples}{$room, startProjects$}
+  \State $current \gets \Call{DeepCopy}{startProjects}$
+  \For{\textbf{each} project $p$ in $current$}
+    \State $p.samples \gets \max(p.samples, MIN\_SAMPLES)$
+  \EndFor
+
+  \State $baseEval \gets \Call{SchedulerEvaluate}{current, room}$
+  \State $evalBudget \gets \max(500, SAMPLE\_SEARCH\_MAX\_EVALS)$
+  \State $evals \gets 0$; $passes \gets 0$
+
+  \While{$evals < evalBudget$}
+    \State $improvedAny \gets false$; $passes \gets passes + 1$
+    \For{$i \gets 0$ \textbf{to} $|current|-1$}
+      \If{$evals \ge evalBudget$} \State \textbf{break} \EndIf
+      \State $p \gets current[i]$
+      \State $curS \gets p.samples$
+      \State $bestS \gets curS$; $bestEval \gets baseEval$
+
+      \If{$curS \le MIN\_SAMPLES$}
+        \State $deltas \gets [ +1, +2 ]$
+      \Else
+        \State $deltas \gets [ +1, +2, -1, -2 ]$
+      \EndIf
+
+      \For{\textbf{each} $d$ in $deltas$}
+        \If{$evals \ge evalBudget$} \State \textbf{break} \EndIf
+        \State $ns \gets curS + d$
+        \If{$ns < MIN\_SAMPLES$ \textbf{or} $ns > SAMPLE\_MAX$ \textbf{or} $ns = curS$}
+          \State \textbf{continue}
+        \EndIf
+
+        \State $cand \gets \Call{DeepCopy}{current}$
+        \State $cand[i].samples \gets ns$
+        \State $e \gets \Call{SchedulerEvaluate}{cand, room}$
+        \State $evals \gets evals + 1$
+
+        \If{$e.totalLateness < bestEval.totalLateness$ \textbf{or} $(e.totalLateness = bestEval.totalLateness \wedge ns < bestS)$}
+          \State $bestEval \gets e$; $bestS \gets ns$
+        \EndIf
+      \EndFor
+
+      \State $accept \gets (bestEval.totalLateness < baseEval.totalLateness)\ \vee\ (bestEval.totalLateness = baseEval.totalLateness \wedge bestS < curS)$
+      \If{$accept$ \textbf{and} $bestS \neq curS$}
+        \State $p.samples \gets bestS$
+        \State $baseEval \gets bestEval$
+        \State $improvedAny \gets true$
+      \EndIf
+    \EndFor
+
+    \If{\textbf{not} $improvedAny$} \State \textbf{break} \EndIf
+    \If{$passes > 200$} \State \textbf{break} \Comment{safety} \EndIf
+  \EndWhile
+
+  \State \Return $current$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\end{document}
+
