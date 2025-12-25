@@ -209,6 +209,161 @@ public final class HeuristicSolver {
     return true;
   }
 
+  private record RoomObjective(
+      int uncoveredVoltEnvs,
+      int uncoveredTotalEnvs,
+      double bottleneck,      // max(maxVoltRatio, maxTotalRatio)
+      double bottleneckVolt,  // max over env of demandVolt/stationsVolt
+      double bottleneckTotal  // max over env of demandTotal/stationsTotal
+  ) implements Comparable<RoomObjective> {
+    @Override
+    public int compareTo(RoomObjective o) {
+      if (uncoveredVoltEnvs != o.uncoveredVoltEnvs) return Integer.compare(uncoveredVoltEnvs, o.uncoveredVoltEnvs);
+      if (uncoveredTotalEnvs != o.uncoveredTotalEnvs) return Integer.compare(uncoveredTotalEnvs, o.uncoveredTotalEnvs);
+      if (bottleneck != o.bottleneck) return Double.compare(bottleneck, o.bottleneck);
+      if (bottleneckVolt != o.bottleneckVolt) return Double.compare(bottleneckVolt, o.bottleneckVolt);
+      return Double.compare(bottleneckTotal, o.bottleneckTotal);
+    }
+  }
+
+  private static RoomObjective objectiveFor(
+      Set<Env> demandedEnvs,
+      Set<Env> demandedByVolt,
+      Map<Env, Long> demandTotal,
+      Map<Env, Long> demandVolt,
+      Map<Env, Integer> stationsTotal,
+      Map<Env, Integer> stationsVolt
+  ) {
+    int uncoveredTotal = 0;
+    int uncoveredVolt = 0;
+
+    double maxTotal = 0.0;
+    double maxVolt = 0.0;
+
+    for (Env env : demandedEnvs) {
+      long dt = demandTotal.getOrDefault(env, 0L);
+      if (dt <= 0) continue;
+      int st = stationsTotal.getOrDefault(env, 0);
+      if (st <= 0) {
+        uncoveredTotal++;
+      } else {
+        maxTotal = Math.max(maxTotal, dt / (double) st);
+      }
+    }
+
+    for (Env env : demandedByVolt) {
+      long dv = demandVolt.getOrDefault(env, 0L);
+      if (dv <= 0) continue;
+      int sv = stationsVolt.getOrDefault(env, 0);
+      if (sv <= 0) {
+        uncoveredVolt++;
+      } else {
+        maxVolt = Math.max(maxVolt, dv / (double) sv);
+      }
+    }
+
+    double bottleneck = Math.max(maxTotal, maxVolt);
+    return new RoomObjective(uncoveredVolt, uncoveredTotal, bottleneck, maxVolt, maxTotal);
+  }
+
+  private static RoomObjective objectiveIfAssign(
+      Set<Env> demandedEnvs,
+      Set<Env> demandedByVolt,
+      Map<Env, Long> demandTotal,
+      Map<Env, Long> demandVolt,
+      Map<Env, Integer> stationsTotal,
+      Map<Env, Integer> stationsVolt,
+      ChamberSpec chamber,
+      Env targetEnv
+  ) {
+    int addTotal = chamber.stations;
+    int addVolt = chamber.voltageCapable ? chamber.stations : 0;
+
+    int uncoveredTotal = 0;
+    int uncoveredVolt = 0;
+
+    double maxTotal = 0.0;
+    double maxVolt = 0.0;
+
+    for (Env env : demandedEnvs) {
+      long dt = demandTotal.getOrDefault(env, 0L);
+      if (dt <= 0) continue;
+      int st = stationsTotal.getOrDefault(env, 0) + (env.equals(targetEnv) ? addTotal : 0);
+      if (st <= 0) {
+        uncoveredTotal++;
+      } else {
+        maxTotal = Math.max(maxTotal, dt / (double) st);
+      }
+    }
+
+    for (Env env : demandedByVolt) {
+      long dv = demandVolt.getOrDefault(env, 0L);
+      if (dv <= 0) continue;
+      int sv = stationsVolt.getOrDefault(env, 0) + (env.equals(targetEnv) ? addVolt : 0);
+      if (sv <= 0) {
+        uncoveredVolt++;
+      } else {
+        maxVolt = Math.max(maxVolt, dv / (double) sv);
+      }
+    }
+
+    double bottleneck = Math.max(maxTotal, maxVolt);
+    return new RoomObjective(uncoveredVolt, uncoveredTotal, bottleneck, maxVolt, maxTotal);
+  }
+
+  private static Env chooseBestEnvForChamber(
+      ChamberSpec chamber,
+      Set<Env> demandedEnvs,
+      Set<Env> demandedByVolt,
+      Map<Env, Long> demandTotal,
+      Map<Env, Long> demandVolt,
+      Map<Env, Integer> stationsTotal,
+      Map<Env, Integer> stationsVolt
+  ) {
+    Env bestEnv = null;
+    RoomObjective bestObj = null;
+
+    for (Env env : demandedEnvs) {
+      if (env.humidity == Humidity.H85 && !chamber.humidityAdjustable) continue;
+      RoomObjective obj = objectiveIfAssign(demandedEnvs, demandedByVolt, demandTotal, demandVolt, stationsTotal, stationsVolt, chamber, env);
+      if (bestObj == null || obj.compareTo(bestObj) < 0) {
+        bestObj = obj;
+        bestEnv = env;
+      }
+    }
+
+    if (bestEnv == null) {
+      throw new IllegalStateException("No feasible env for chamber=" + chamber.id);
+    }
+    return bestEnv;
+  }
+
+  private static Map<Env, Integer> recomputeStationsTotal(Map<String, Env> assignment) {
+    Map<String, ChamberSpec> chamberById = new HashMap<>();
+    for (ChamberSpec c : Data.CHAMBERS) chamberById.put(c.id, c);
+    Map<Env, Integer> out = new HashMap<>();
+    for (var e : assignment.entrySet()) {
+      Env env = e.getValue();
+      ChamberSpec c = chamberById.get(e.getKey());
+      if (env == null || c == null) continue;
+      out.merge(env, c.stations, Integer::sum);
+    }
+    return out;
+  }
+
+  private static Map<Env, Integer> recomputeStationsVolt(Map<String, Env> assignment) {
+    Map<String, ChamberSpec> chamberById = new HashMap<>();
+    for (ChamberSpec c : Data.CHAMBERS) chamberById.put(c.id, c);
+    Map<Env, Integer> out = new HashMap<>();
+    for (var e : assignment.entrySet()) {
+      Env env = e.getValue();
+      ChamberSpec c = chamberById.get(e.getKey());
+      if (env == null || c == null) continue;
+      if (c.voltageCapable) out.merge(env, c.stations, Integer::sum);
+    }
+    return out;
+  }
+
   private List<Project> stage2_increaseSamples(Map<String, Env> room, List<Project> startProjects) {
     List<Project> current = deepCopy(startProjects);
 
@@ -290,9 +445,16 @@ public final class HeuristicSolver {
 
   /**
    * Aşama 1: Oda set değerlerini belirle (sıcaklık/nem sabit kalır).
-   * Basit yük dengeleme heuristiği:
-   * - Voltaj ihtiyacı olan iş yükünü önce voltajlı odalara dağıt.
-   * - 85% nem gerektiren işler sadece humAdj odalara atanabilir.
+   *
+   * Revize başlangıç heuristiği (kısıt + birlikte dengeleme):
+   * - Voltaj gerektiren işler SADECE voltaj-capable odalarda koşabilir (kısıt).
+   * - Voltaj-capable odalar aynı zamanda voltajsız işler için de kapasite sağlar (esnek kaynak).
+   * - Bu yüzden oda-env atamasını sadece DV (volt iş yükü) veya sadece D (toplam iş yükü) ile değil,
+   *   birlikte optimize eden bir minimax hedefle yapıyoruz:
+   *     bottleneck = max( max_env (D_env / S_env),  max_env (DV_env / SV_env) )
+   *   burada S_env toplam istasyon sayısı, SV_env voltaj-capable istasyon sayısı.
+   * - Ayrıca talep olan her env için en az 1 oda, voltaj talebi olan her env için en az 1 voltajlı oda garantilenir.
+   * - 85% nem env'leri sadece humidityAdjustable odalara atanabilir.
    */
   private Map<String, Env> stage1_assignRooms(List<Project> projects) {
     Objects.requireNonNull(projects);
@@ -324,131 +486,147 @@ public final class HeuristicSolver {
       throw new IllegalStateException("No demanded environments; check project test matrix.");
     }
 
-    // assigned station counts per env
-    Map<Env, Integer> assignedStationsTotal = new HashMap<>();
-    Map<Env, Integer> assignedStationsVolt = new HashMap<>();
+    // demanded-by-voltage envs (needs at least one voltage-capable room)
+    Set<Env> demandedByVolt = new LinkedHashSet<>();
+    for (Env env : demandedEnvs) {
+      if (demandVolt.getOrDefault(env, 0L) > 0L) demandedByVolt.add(env);
+    }
 
-    List<ChamberSpec> voltRooms = Data.CHAMBERS.stream().filter(c -> c.voltageCapable)
-        .sorted(Comparator.comparingInt((ChamberSpec c) -> c.stations).reversed())
-        .toList();
-    List<ChamberSpec> nonVoltRooms = Data.CHAMBERS.stream().filter(c -> !c.voltageCapable)
-        .sorted(Comparator.comparingInt((ChamberSpec c) -> c.stations).reversed())
-        .toList();
-
+    // Greedy construction with integrated objective
+    Map<Env, Integer> stationsTotal = new HashMap<>();
+    Map<Env, Integer> stationsVolt = new HashMap<>();
     Map<String, Env> assignment = new LinkedHashMap<>();
 
-    // 1) volt rooms
-    for (ChamberSpec c : voltRooms) {
-      Env best = pickBestEnv(c, demandedEnvs, demandVolt, demandTotal, assignedStationsVolt, assignedStationsTotal, true);
-      assignment.put(c.id, best);
-      assignedStationsTotal.merge(best, c.stations, Integer::sum);
-      assignedStationsVolt.merge(best, c.stations, Integer::sum);
-    }
+    // (0) Coverage: ensure each voltage-demanded env has >=1 voltage room (humidity feasibility still applies).
+    List<Env> voltEnvs = demandedByVolt.stream()
+        .sorted((a, b) -> Long.compare(demandVolt.getOrDefault(b, 0L), demandVolt.getOrDefault(a, 0L)))
+        .toList();
+    List<ChamberSpec> availableVoltRooms = Data.CHAMBERS.stream()
+        .filter(c -> c.voltageCapable)
+        .sorted(Comparator.comparingInt((ChamberSpec c) -> c.stations).reversed())
+        .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 
-    // 2) non-volt rooms
-    for (ChamberSpec c : nonVoltRooms) {
-      // non-volt room'lar 85% destekliyorsa yine seçebilir; voltaj iş yükü zaten volt odalara gitti.
-      Env best = pickBestEnv(c, demandedEnvs, demandTotal, demandTotal, assignedStationsTotal, assignedStationsTotal, false);
-      assignment.put(c.id, best);
-      assignedStationsTotal.merge(best, c.stations, Integer::sum);
-    }
-
-    // Feasibility repair: voltaj ihtiyacı olan env'ler için en az 1 voltajlı oda olmalı
-    for (Env env : demandedEnvs) {
-      long dv = demandVolt.getOrDefault(env, 0L);
-      if (dv <= 0) continue;
-      int asg = assignedStationsVolt.getOrDefault(env, 0);
-      if (asg > 0) continue;
-
-      // bir volt odasını bu env'e çek
-      String bestChId = null;
-      long bestLoss = Long.MAX_VALUE;
-      for (ChamberSpec c : voltRooms) {
-        Env cur = assignment.get(c.id);
-        if (cur.equals(env)) { bestChId = c.id; bestLoss = 0; break; }
+    for (Env env : voltEnvs) {
+      ChamberSpec chosen = null;
+      for (ChamberSpec c : availableVoltRooms) {
         if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
-
-        long curNeed = demandVolt.getOrDefault(cur, 0L);
-        long targetNeed = demandVolt.getOrDefault(env, 0L);
-        long loss = Math.max(0, curNeed - targetNeed);
-        if (loss < bestLoss) {
-          bestLoss = loss;
-          bestChId = c.id;
-        }
+        chosen = c;
+        break; // rooms already sorted by stations desc
       }
-      if (bestChId == null) {
-        throw new IllegalStateException("Feasible oda ataması yok: voltajlı env " + env + " için uygun voltaj odası bulunamadı");
+      if (chosen == null) {
+        throw new IllegalStateException("Feasible oda ataması yok: voltaj talebi olan env " + env +
+            " için uygun voltaj+humidity oda bulunamadı");
       }
-      assignment.put(bestChId, env);
+      availableVoltRooms.remove(chosen);
+      assignment.put(chosen.id, env);
+      stationsTotal.merge(env, chosen.stations, Integer::sum);
+      stationsVolt.merge(env, chosen.stations, Integer::sum);
     }
 
-    // Feasibility check: her env talep varsa en az 1 oda
-    for (Env env : demandedEnvs) {
-      if (demandTotal.getOrDefault(env, 0L) <= 0) continue;
-      boolean any = assignment.values().stream().anyMatch(e -> e.equals(env));
-      if (!any) {
-        // En düşük toplam skorlu (talep/istasyon) env'ye atanmış bir odayı çevir (minimal zarar).
-        String bestSwapId = null;
-        double bestSwapScore = Double.POSITIVE_INFINITY;
+    // (1) Assign remaining rooms (both volt and non-volt) using minimax objective on total+volt bottlenecks.
+    List<ChamberSpec> remaining = Data.CHAMBERS.stream()
+        .filter(c -> !assignment.containsKey(c.id))
+        .sorted(Comparator.comparingInt((ChamberSpec c) -> c.stations).reversed())
+        .toList();
+
+    for (ChamberSpec c : remaining) {
+      Env best = chooseBestEnvForChamber(c, demandedEnvs, demandedByVolt, demandTotal, demandVolt, stationsTotal, stationsVolt);
+      assignment.put(c.id, best);
+      stationsTotal.merge(best, c.stations, Integer::sum);
+      if (c.voltageCapable) stationsVolt.merge(best, c.stations, Integer::sum);
+    }
+
+    // (2) Repair: enforce feasibility in terms of demanded env coverage (rooms) and voltage env coverage.
+    // Recompute to be safe (repairs below may change env assignments).
+    Set<Env> demandedRooms = demandedEnvs;
+    if (!isRoomFeasible(assignment, demandedRooms, demandedByVolt)) {
+      // A) fix missing voltage envs (need at least one voltage room)
+      for (Env env : demandedByVolt) {
+        boolean hasVoltRoom = false;
+        for (ChamberSpec c : Data.CHAMBERS) {
+          if (!c.voltageCapable) continue;
+          Env cur = assignment.get(c.id);
+          if (env.equals(cur)) { hasVoltRoom = true; break; }
+        }
+        if (hasVoltRoom) continue;
+
+        String bestMoveCh = null;
+        RoomObjective bestObj = null;
+        for (ChamberSpec c : Data.CHAMBERS) {
+          if (!c.voltageCapable) continue;
+          Env cur = assignment.get(c.id);
+          if (cur == null) continue;
+          if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
+
+          // don't steal the only voltage room from another voltage-demanded env
+          if (demandedByVolt.contains(cur)) {
+            int count = 0;
+            for (ChamberSpec c2 : Data.CHAMBERS) {
+              if (!c2.voltageCapable) continue;
+              if (cur.equals(assignment.get(c2.id))) count++;
+            }
+            if (count <= 1) continue;
+          }
+
+          Map<String, Env> cand = new LinkedHashMap<>(assignment);
+          cand.put(c.id, env);
+          if (!isRoomFeasible(cand, demandedRooms, demandedByVolt)) continue;
+          Map<Env, Integer> stT = recomputeStationsTotal(cand);
+          Map<Env, Integer> stV = recomputeStationsVolt(cand);
+          RoomObjective obj = objectiveFor(demandedRooms, demandedByVolt, demandTotal, demandVolt, stT, stV);
+          if (bestObj == null || obj.compareTo(bestObj) < 0) {
+            bestObj = obj;
+            bestMoveCh = c.id;
+          }
+        }
+        if (bestMoveCh == null) {
+          throw new IllegalStateException("Repair failed: env " + env + " için voltaj odası bulunamadı");
+        }
+        assignment.put(bestMoveCh, env);
+      }
+
+      // B) fix missing demanded envs (need at least one room)
+      for (Env env : demandedRooms) {
+        if (demandTotal.getOrDefault(env, 0L) <= 0L) continue;
+        boolean anyRoom = assignment.values().stream().anyMatch(e -> env.equals(e));
+        if (anyRoom) continue;
+
+        String bestMoveCh = null;
+        RoomObjective bestObj = null;
         for (ChamberSpec c : Data.CHAMBERS) {
           Env cur = assignment.get(c.id);
           if (cur == null) continue;
           if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
 
-          long curDemand = demandTotal.getOrDefault(cur, 0L);
-          int curStations = assignedStationsTotal.getOrDefault(cur, 0);
-          double curScore = curDemand / (curStations + 1.0);
-          if (curScore < bestSwapScore) {
-            bestSwapScore = curScore;
-            bestSwapId = c.id;
+          // don't break voltage coverage by moving a voltage room away from a voltage-demanded env
+          if (c.voltageCapable && demandedByVolt.contains(cur)) {
+            int count = 0;
+            for (ChamberSpec c2 : Data.CHAMBERS) {
+              if (!c2.voltageCapable) continue;
+              if (cur.equals(assignment.get(c2.id))) count++;
+            }
+            if (count <= 1) continue;
+          }
+
+          Map<String, Env> cand = new LinkedHashMap<>(assignment);
+          cand.put(c.id, env);
+          if (!isRoomFeasible(cand, demandedRooms, demandedByVolt)) continue;
+          Map<Env, Integer> stT = recomputeStationsTotal(cand);
+          Map<Env, Integer> stV = recomputeStationsVolt(cand);
+          RoomObjective obj = objectiveFor(demandedRooms, demandedByVolt, demandTotal, demandVolt, stT, stV);
+          if (bestObj == null || obj.compareTo(bestObj) < 0) {
+            bestObj = obj;
+            bestMoveCh = c.id;
           }
         }
-        if (bestSwapId == null) {
-          throw new IllegalStateException("Feasible oda ataması yok: env " + env + " için oda çevrilemiyor");
+        if (bestMoveCh == null) {
+          throw new IllegalStateException("Repair failed: env " + env + " için oda atanamıyor");
         }
-        assignment.put(bestSwapId, env);
+        assignment.put(bestMoveCh, env);
       }
     }
 
     return assignment;
-  }
-
-  private static Env pickBestEnv(
-      ChamberSpec chamber,
-      Set<Env> allEnvs,
-      Map<Env, Long> primaryDemand,
-      Map<Env, Long> fallbackDemand,
-      Map<Env, Integer> primaryAssignedStations,
-      Map<Env, Integer> totalAssignedStations,
-      boolean prioritizePrimary
-  ) {
-    Env best = null;
-    double bestScore = Double.NEGATIVE_INFINITY;
-
-    for (Env env : allEnvs) {
-      if (env.humidity == Humidity.H85 && !chamber.humidityAdjustable) continue;
-
-      long d1 = primaryDemand.getOrDefault(env, 0L);
-      long d2 = fallbackDemand.getOrDefault(env, 0L);
-
-      // Eğer primary demand boşsa total'a bak.
-      long demand = (prioritizePrimary && d1 > 0) ? d1 : d2;
-
-      int assigned = prioritizePrimary ? primaryAssignedStations.getOrDefault(env, 0) : totalAssignedStations.getOrDefault(env, 0);
-      double score = demand / (assigned + 1.0);
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = env;
-      }
-    }
-
-    if (best == null) {
-      // teorik olarak mümkün değil
-      throw new IllegalStateException("No feasible env for chamber=" + chamber.id);
-    }
-
-    return best;
   }
 
   private static List<Project> deepCopy(List<Project> ps) {
