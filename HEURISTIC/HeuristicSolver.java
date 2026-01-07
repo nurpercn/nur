@@ -222,9 +222,16 @@ public final class HeuristicSolver {
       System.out.println("INFO: Stage2 initial total lateness = " + baseEval.totalLateness);
     }
 
+    // Keep best solution encountered (because we may apply "shake" moves that can worsen temporarily).
+    List<Project> bestOverall = deepCopy(current);
+    Scheduler.EvalResult bestOverallEval = baseEval;
+    int bestOverallTotalSamples = totalSamples(bestOverall);
+
     int evalBudget = Math.max(500, Data.SAMPLE_SEARCH_MAX_EVALS);
     int evals = 0;
     int passes = 0;
+    int shakes = 0;
+    boolean nextShakeDown = true; // alternate: down -> up -> down ...
 
     // Per-project local search: try +1, +2, -1, -2 and accept best (min lateness).
     // Tie-break: if lateness equal, prefer fewer samples (keeps solution minimal).
@@ -274,6 +281,14 @@ public final class HeuristicSolver {
                 " " + curSamples + " -> " + bestSamples +
                 " totalLateness=" + baseEval.totalLateness);
           }
+        }
+
+        // track global best
+        if (baseEval.totalLateness < bestOverallEval.totalLateness ||
+            (baseEval.totalLateness == bestOverallEval.totalLateness && totalSamples(current) < bestOverallTotalSamples)) {
+          bestOverall = deepCopy(current);
+          bestOverallEval = baseEval;
+          bestOverallTotalSamples = totalSamples(bestOverall);
         }
       }
 
@@ -343,6 +358,44 @@ public final class HeuristicSolver {
                 pj.id + " " + sj0 + " -> " + pj.samples +
                 " totalLateness=" + baseEval.totalLateness);
           }
+
+          // track global best
+          if (baseEval.totalLateness < bestOverallEval.totalLateness ||
+              (baseEval.totalLateness == bestOverallEval.totalLateness && totalSamples(current) < bestOverallTotalSamples)) {
+            bestOverall = deepCopy(current);
+            bestOverallEval = baseEval;
+            bestOverallTotalSamples = totalSamples(bestOverall);
+          }
+        }
+      }
+
+      // If still no improvement, apply "shake" to escape local optimum:
+      // - First: set 10% of projects to MIN_SAMPLES (2)
+      // - Next: set 10% of projects to 6 (bounded by SAMPLE_MAX)
+      if (!improvedAny && evals < evalBudget) {
+        boolean didShake = false;
+        if (shakes < 100) { // safety
+          if (nextShakeDown) {
+            didShake = tryShakeDownToMin(room, current, baseEval, evalBudget, evals);
+          } else {
+            didShake = tryShakeUpToSix(room, current, baseEval, evalBudget, evals);
+          }
+        }
+
+        if (didShake) {
+          // tryShake* mutates current/baseEval via returned holder
+          baseEval = lastShakeEval;
+          evals = lastShakeEvals;
+          improvedAny = true;
+          shakes++;
+          nextShakeDown = !nextShakeDown;
+
+          if (baseEval.totalLateness < bestOverallEval.totalLateness ||
+              (baseEval.totalLateness == bestOverallEval.totalLateness && totalSamples(current) < bestOverallTotalSamples)) {
+            bestOverall = deepCopy(current);
+            bestOverallEval = baseEval;
+            bestOverallTotalSamples = totalSamples(bestOverall);
+          }
         }
       }
 
@@ -354,7 +407,132 @@ public final class HeuristicSolver {
       System.out.println("INFO: Stage2 sample-search passes=" + passes + " evals=" + evals + " budget=" + evalBudget +
           " finalTotal=" + baseEval.totalLateness);
     }
-    return current;
+    return bestOverall;
+  }
+
+  // ---- Stage2 helpers (shake moves) ----
+
+  // These two fields are a small workaround to avoid threading an object through the loop.
+  // They are only used inside stage2_increaseSamples call chain.
+  private Scheduler.EvalResult lastShakeEval;
+  private int lastShakeEvals;
+
+  private static int totalSamples(List<Project> ps) {
+    int sum = 0;
+    for (Project p : ps) sum += p.samples;
+    return sum;
+  }
+
+  private boolean tryShakeDownToMin(
+      Map<String, Env> room,
+      List<Project> current,
+      Scheduler.EvalResult baseEval,
+      int evalBudget,
+      int evals
+  ) {
+    if (evals >= evalBudget) return false;
+    int k = Math.max(1, (int) Math.ceil(current.size() * 0.10));
+
+    Map<String, Integer> latenessById = new HashMap<>();
+    for (ProjectResult r : baseEval.projectResults) latenessById.put(r.projectId, r.lateness);
+
+    List<Integer> idxs = new ArrayList<>();
+    for (int i = 0; i < current.size(); i++) {
+      if (current.get(i).samples > Data.MIN_SAMPLES) idxs.add(i);
+    }
+    if (idxs.isEmpty()) return false;
+
+    idxs.sort((a, b) -> {
+      Project pa = current.get(a);
+      Project pb = current.get(b);
+      int sa = pa.samples;
+      int sb = pb.samples;
+      if (sa != sb) return Integer.compare(sb, sa); // higher samples first
+      int la = latenessById.getOrDefault(pa.id, 0);
+      int lb = latenessById.getOrDefault(pb.id, 0);
+      return Integer.compare(lb, la); // higher lateness first
+    });
+
+    List<Project> cand = deepCopy(current);
+    int changed = 0;
+    for (int t = 0; t < idxs.size() && changed < k; t++) {
+      int i = idxs.get(t);
+      if (cand.get(i).samples > Data.MIN_SAMPLES) {
+        cand.get(i).samples = Data.MIN_SAMPLES;
+        changed++;
+      }
+    }
+    if (changed == 0) return false;
+
+    Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+    evals++;
+    current.clear();
+    current.addAll(cand);
+    lastShakeEval = e;
+    lastShakeEvals = evals;
+    if (verbose) {
+      System.out.println("INFO: Stage2 shake DOWN => set " + changed + " projects to " + Data.MIN_SAMPLES +
+          " totalLateness=" + e.totalLateness);
+    }
+    return true;
+  }
+
+  private boolean tryShakeUpToSix(
+      Map<String, Env> room,
+      List<Project> current,
+      Scheduler.EvalResult baseEval,
+      int evalBudget,
+      int evals
+  ) {
+    if (evals >= evalBudget) return false;
+    int target = Math.min(6, Data.SAMPLE_MAX);
+    if (target < Data.MIN_SAMPLES) target = Data.MIN_SAMPLES;
+    int k = Math.max(1, (int) Math.ceil(current.size() * 0.10));
+
+    Map<String, Integer> latenessById = new HashMap<>();
+    for (ProjectResult r : baseEval.projectResults) latenessById.put(r.projectId, r.lateness);
+
+    List<Integer> idxs = new ArrayList<>();
+    for (int i = 0; i < current.size(); i++) {
+      if (current.get(i).samples < target) idxs.add(i);
+    }
+    if (idxs.isEmpty()) return false;
+
+    int finalTarget = target;
+    idxs.sort((a, b) -> {
+      Project pa = current.get(a);
+      Project pb = current.get(b);
+      int la = latenessById.getOrDefault(pa.id, 0);
+      int lb = latenessById.getOrDefault(pb.id, 0);
+      if (la != lb) return Integer.compare(lb, la); // higher lateness first
+      // for same lateness, boost those further from target (lower samples first)
+      int da = finalTarget - pa.samples;
+      int db = finalTarget - pb.samples;
+      return Integer.compare(db, da);
+    });
+
+    List<Project> cand = deepCopy(current);
+    int changed = 0;
+    for (int t = 0; t < idxs.size() && changed < k; t++) {
+      int i = idxs.get(t);
+      if (cand.get(i).samples < finalTarget) {
+        cand.get(i).samples = finalTarget;
+        changed++;
+      }
+    }
+    if (changed == 0) return false;
+
+    Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+    evals++;
+    current.clear();
+    current.addAll(cand);
+    lastShakeEval = e;
+    lastShakeEvals = evals;
+    if (verbose) {
+      System.out.println("INFO: Stage2 shake UP => set " + changed + " projects to " + finalTarget +
+          " totalLateness=" + e.totalLateness);
+    }
+    return true;
   }
 
   /**
