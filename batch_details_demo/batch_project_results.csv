@@ -1,5 +1,0 @@
-instanceId,iteration,projectId,dueDateDays,needsVolt,samples,completionDay,lateness
-I1,1,P1,90,false,2,70,0
-I1,1,P2,40,true,5,40,0
-I2,1,P1,60,false,2,70,10
-I2,1,P2,45,true,2,75,30
