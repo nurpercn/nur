@@ -61,6 +61,21 @@ java -cp out tr.testodasi.heuristic.Main --batch instances.csv --batchOut batch_
 
 Çıktı: `batch_results.csv` (tek dosya; satır başına 1 instance özeti)
 
+### Detaylı batch çıktı gösterimi
+
+```bash
+# Özet + detay (proje sonuçları + oda env atamaları)
+java -cp out tr.testodasi.heuristic.Main --batch instances.csv --batchOut batch_results.csv --batchDetails batch_details
+
+# İstersen tüm schedule satırlarını da ekle (dosya büyük olabilir)
+java -cp out tr.testodasi.heuristic.Main --batch instances.csv --batchOut batch_results.csv --batchDetails batch_details --batchSchedule
+```
+
+Detay klasörü içinde:
+- `batch_project_results.csv`
+- `batch_chamber_env.csv`
+- `batch_schedule.csv` (sadece `--batchSchedule` ile)
+
 ## Veri / Instance güncelleme
 
 Tüm veri gömülü halde `HEURISTIC/Data.java` içindedir.

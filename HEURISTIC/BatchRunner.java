@@ -33,6 +33,14 @@ public final class BatchRunner {
   private BatchRunner() {}
 
   public static void run(Path instancesCsv, Path outCsv, boolean verbose) throws IOException {
+    run(instancesCsv, outCsv, null, false, verbose);
+  }
+
+  /**
+   * @param detailsDir if non-null, writes additional detailed CSVs into this directory
+   * @param includeSchedule if true, also writes the full schedule rows (can be large)
+   */
+  public static void run(Path instancesCsv, Path outCsv, Path detailsDir, boolean includeSchedule, boolean verbose) throws IOException {
     Objects.requireNonNull(instancesCsv);
     Objects.requireNonNull(outCsv);
 
@@ -65,6 +73,27 @@ public final class BatchRunner {
 
     DataSnapshot snap = DataSnapshot.capture();
     Files.createDirectories(outCsv.toAbsolutePath().getParent() == null ? Path.of(".") : outCsv.toAbsolutePath().getParent());
+
+    BufferedWriter projW = null;
+    BufferedWriter envW = null;
+    BufferedWriter schedW = null;
+    if (detailsDir != null) {
+      Files.createDirectories(detailsDir);
+      projW = Files.newBufferedWriter(detailsDir.resolve("batch_project_results.csv"));
+      envW = Files.newBufferedWriter(detailsDir.resolve("batch_chamber_env.csv"));
+      if (includeSchedule) {
+        schedW = Files.newBufferedWriter(detailsDir.resolve("batch_schedule.csv"));
+      }
+
+      projW.write("instanceId,iteration,projectId,dueDateDays,needsVolt,samples,completionDay,lateness");
+      projW.newLine();
+      envW.write("instanceId,iteration,chamberId,stations,voltageCapable,humidityAdjustable,envTempC,envHumidity");
+      envW.newLine();
+      if (schedW != null) {
+        schedW.write("instanceId,iteration,projectId,testId,category,tempC,humidity,durationDays,needsVoltage,dueDateDays,samples,sampleIdx,chamberId,stationIdx,startDay,endDay");
+        schedW.newLine();
+      }
+    }
 
     try (BufferedWriter w = Files.newBufferedWriter(outCsv)) {
       w.write("instanceId,projects,bestIteration,totalLateness,totalSamples,horizonDays,avgStationUtil,maxStationUtil,avgChamberUtil,runtimeMs");
@@ -102,6 +131,45 @@ public final class BatchRunner {
             (t1 - t0));
         w.newLine();
 
+        if (projW != null) {
+          // project results
+          Map<String, Project> projectById = new HashMap<>();
+          for (Project p : best.projects) projectById.put(p.id, p);
+          for (ProjectResult r : best.results) {
+            Project p = projectById.get(r.projectId);
+            projW.write(csv(instanceId) + "," + best.iteration + "," + csv(r.projectId) + "," +
+                (p != null ? p.dueDateDays : r.dueDate) + "," +
+                (p != null && p.needsVoltage) + "," +
+                (p != null ? p.samples : "") + "," +
+                r.completionDay + "," +
+                r.lateness);
+            projW.newLine();
+          }
+
+          // chamber env assignment
+          for (ChamberSpec c : Data.CHAMBERS) {
+            Env env = best.chamberEnv.get(c.id);
+            envW.write(csv(instanceId) + "," + best.iteration + "," + c.id + "," + c.stations + "," +
+                c.voltageCapable + "," + c.humidityAdjustable + "," +
+                (env != null ? env.temperatureC : "") + "," +
+                (env != null ? env.humidity : ""));
+            envW.newLine();
+          }
+
+          // full schedule (optional)
+          if (schedW != null) {
+            for (Scheduler.ScheduledJob j : best.schedule) {
+              Project p = projectById.get(j.projectId);
+              schedW.write(csv(instanceId) + "," + best.iteration + "," +
+                  csv(j.projectId) + "," + j.testId + "," + j.category + "," +
+                  j.env.temperatureC + "," + j.env.humidity + "," + j.durationDays + "," +
+                  (p != null && p.needsVoltage) + "," + (p != null ? p.dueDateDays : "") + "," + (p != null ? p.samples : "") + "," +
+                  j.sampleIdx + "," + j.chamberId + "," + j.stationIdx + "," + j.start + "," + j.end);
+              schedW.newLine();
+            }
+          }
+        }
+
         if (verbose) {
           System.out.println("INFO: Batch instance=" + instanceId +
               " bestIter=" + best.iteration +
@@ -110,6 +178,9 @@ public final class BatchRunner {
         }
       }
     } finally {
+      if (projW != null) try { projW.close(); } catch (IOException ignored) {}
+      if (envW != null) try { envW.close(); } catch (IOException ignored) {}
+      if (schedW != null) try { schedW.close(); } catch (IOException ignored) {}
       snap.restore();
     }
   }

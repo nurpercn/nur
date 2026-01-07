@@ -25,6 +25,8 @@ public final class Main {
     boolean diagnose = false;
     String batchPath = null;
     String batchOut = null;
+    String batchDetailsDir = null;
+    boolean batchSchedule = false;
     for (int idx = 0; idx < args.length; idx++) {
       String a = args[idx];
       if ("--help".equalsIgnoreCase(a) || "-h".equalsIgnoreCase(a) || "-?".equalsIgnoreCase(a)) {
@@ -46,6 +48,21 @@ public final class Main {
           batchOut = args[idx + 1].trim();
           idx++;
         }
+      }
+      if (a != null && (startsWithIgnoreCase(a, "--batchdetails=") || startsWithIgnoreCase(a, "--batchdetaildir="))) {
+        int p = a.indexOf('=');
+        batchDetailsDir = p >= 0 ? a.substring(p + 1).trim() : null;
+      } else if ("--batchDetails".equalsIgnoreCase(a) || "--batchDetailDir".equalsIgnoreCase(a)) {
+        if (idx + 1 < args.length) {
+          batchDetailsDir = args[idx + 1].trim();
+          idx++;
+        }
+      }
+      if (a != null && startsWithIgnoreCase(a, "--batchschedule=")) {
+        String v = a.substring("--batchschedule=".length()).trim();
+        batchSchedule = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+      } else if ("--batchSchedule".equalsIgnoreCase(a)) {
+        batchSchedule = true;
       }
       if ("--verbose".equalsIgnoreCase(a) || "-v".equalsIgnoreCase(a)) {
         verbose = true;
@@ -178,11 +195,20 @@ public final class Main {
     if (batchPath != null && !batchPath.isBlank()) {
       String out = (batchOut == null || batchOut.isBlank()) ? "batch_results.csv" : batchOut;
       try {
-        BatchRunner.run(Paths.get(batchPath), Paths.get(out), verbose);
+        BatchRunner.run(
+            Paths.get(batchPath),
+            Paths.get(out),
+            (batchDetailsDir == null || batchDetailsDir.isBlank()) ? null : Paths.get(batchDetailsDir),
+            batchSchedule,
+            verbose
+        );
       } catch (IOException e) {
         throw new RuntimeException("Failed to run batch: " + batchPath, e);
       }
       System.out.println("Batch results written to: " + Paths.get(out).toAbsolutePath());
+      if (batchDetailsDir != null && !batchDetailsDir.isBlank()) {
+        System.out.println("Batch details written to: " + Paths.get(batchDetailsDir).toAbsolutePath());
+      }
       return;
     }
 
@@ -242,6 +268,8 @@ public final class Main {
     System.out.println("  -v, --verbose              Print effective options + extra logs");
     System.out.println("  --batch <instances.csv>    Run multiple instances and write one summary CSV");
     System.out.println("  --batchOut <out.csv>       Output path for batch summary (default: batch_results.csv)");
+    System.out.println("  --batchDetails <dir>       Write detailed CSVs into <dir> (project results, chamber env)");
+    System.out.println("  --batchSchedule            (with --batchDetails) also write full schedule rows (can be large)");
     System.out.println("  --dumpProject=P17          Dump detailed schedule for one project id");
     System.out.println("  --dumpFirst10              Dump detailed schedule for P1..P10");
     System.out.println("  --diagnose, --diag         Print capacity/workload diagnostics");
