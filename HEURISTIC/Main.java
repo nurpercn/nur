@@ -23,8 +23,47 @@ public final class Main {
     String csvDir = null;
     boolean csvFlag = false;
     boolean diagnose = false;
+    String batchPath = null;
+    String batchOut = null;
+    String batchDetailsDir = null;
+    boolean batchSchedule = false;
     for (int idx = 0; idx < args.length; idx++) {
       String a = args[idx];
+      if ("--help".equalsIgnoreCase(a) || "-h".equalsIgnoreCase(a) || "-?".equalsIgnoreCase(a)) {
+        printHelp();
+        return;
+      }
+      if (a != null && startsWithIgnoreCase(a, "--batch=")) {
+        batchPath = a.substring("--batch=".length()).trim();
+      } else if ("--batch".equalsIgnoreCase(a)) {
+        if (idx + 1 < args.length) {
+          batchPath = args[idx + 1].trim();
+          idx++;
+        }
+      }
+      if (a != null && startsWithIgnoreCase(a, "--batchout=")) {
+        batchOut = a.substring("--batchout=".length()).trim();
+      } else if ("--batchOut".equalsIgnoreCase(a) || "--batchout".equalsIgnoreCase(a)) {
+        if (idx + 1 < args.length) {
+          batchOut = args[idx + 1].trim();
+          idx++;
+        }
+      }
+      if (a != null && (startsWithIgnoreCase(a, "--batchdetails=") || startsWithIgnoreCase(a, "--batchdetaildir="))) {
+        int p = a.indexOf('=');
+        batchDetailsDir = p >= 0 ? a.substring(p + 1).trim() : null;
+      } else if ("--batchDetails".equalsIgnoreCase(a) || "--batchDetailDir".equalsIgnoreCase(a)) {
+        if (idx + 1 < args.length) {
+          batchDetailsDir = args[idx + 1].trim();
+          idx++;
+        }
+      }
+      if (a != null && startsWithIgnoreCase(a, "--batchschedule=")) {
+        String v = a.substring("--batchschedule=".length()).trim();
+        batchSchedule = "1".equals(v) || "true".equalsIgnoreCase(v) || "yes".equalsIgnoreCase(v);
+      } else if ("--batchSchedule".equalsIgnoreCase(a)) {
+        batchSchedule = true;
+      }
       if ("--verbose".equalsIgnoreCase(a) || "-v".equalsIgnoreCase(a)) {
         verbose = true;
       }
@@ -153,6 +192,26 @@ public final class Main {
       System.out.println("- ENABLE_ROOM_LOCAL_SEARCH=" + Data.ENABLE_ROOM_LOCAL_SEARCH);
     }
 
+    if (batchPath != null && !batchPath.isBlank()) {
+      String out = (batchOut == null || batchOut.isBlank()) ? "batch_results.csv" : batchOut;
+      try {
+        BatchRunner.run(
+            Paths.get(batchPath),
+            Paths.get(out),
+            (batchDetailsDir == null || batchDetailsDir.isBlank()) ? null : Paths.get(batchDetailsDir),
+            batchSchedule,
+            verbose
+        );
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to run batch: " + batchPath, e);
+      }
+      System.out.println("Batch results written to: " + Paths.get(out).toAbsolutePath());
+      if (batchDetailsDir != null && !batchDetailsDir.isBlank()) {
+        System.out.println("Batch details written to: " + Paths.get(batchDetailsDir).toAbsolutePath());
+      }
+      return;
+    }
+
     HeuristicSolver solver = new HeuristicSolver(verbose);
     List<Solution> sols = solver.solve();
 
@@ -196,6 +255,48 @@ public final class Main {
     if (diagnose) {
       printDiagnostics(best);
     }
+  }
+
+  private static void printHelp() {
+    System.out.println("Heuristic scheduler (job-based EDD + room assignment)");
+    System.out.println();
+    System.out.println("Usage:");
+    System.out.println("  java -cp <classes> tr.testodasi.heuristic.Main [options]");
+    System.out.println();
+    System.out.println("Options:");
+    System.out.println("  -h, --help                 Show this help and exit");
+    System.out.println("  -v, --verbose              Print effective options + extra logs");
+    System.out.println("  --batch <instances.csv>    Run multiple instances and write one summary CSV");
+    System.out.println("  --batchOut <out.csv>       Output path for batch summary (default: batch_results.csv)");
+    System.out.println("  --batchDetails <dir>       Write detailed CSVs into <dir> (project results, chamber env)");
+    System.out.println("  --batchSchedule            (with --batchDetails) also write full schedule rows (can be large)");
+    System.out.println("  --dumpProject=P17          Dump detailed schedule for one project id");
+    System.out.println("  --dumpFirst10              Dump detailed schedule for P1..P10");
+    System.out.println("  --diagnose, --diag         Print capacity/workload diagnostics");
+    System.out.println();
+    System.out.println("  --csv                      Export CSV to ./csv_out");
+    System.out.println("  --csvDir <dir>             Export CSV to <dir> (creates dir if missing)");
+    System.out.println("  --csvDir=<dir>             Same as above");
+    System.out.println("  --csv=<dir>                Same as above");
+    System.out.println();
+    System.out.println("Tuning flags (booleans accept: 1/true/yes):");
+    System.out.println("  --samples=<n>              Initial samples per project (min=" + Data.MIN_SAMPLES + ")");
+    System.out.println("  --samples <n>              Same as above");
+    System.out.println("  --sampleIncrease           Enable sample local-search (same as true)");
+    System.out.println("  --sampleIncrease <bool>    Enable/disable sample local-search");
+    System.out.println("  --sampleIncrease=<bool>    Enable/disable sample local-search");
+    System.out.println();
+    System.out.println("  --roomLS=<bool>            Enable/disable room local-search");
+    System.out.println("  --roomLSMaxEvals=<n>       Room local-search evaluation budget");
+    System.out.println("  --roomLSSwap=<bool>        Enable/disable swap neighbors");
+    System.out.println("  --roomLSMove=<bool>        Enable/disable move neighbors");
+    System.out.println("  --roomLSIncludeSample=<bool>  Score rooms using sample-heuristic too (slower)");
+    System.out.println();
+    System.out.println("  --validate=<bool>          Enable/disable schedule validation");
+    System.out.println();
+    System.out.println("Examples:");
+    System.out.println("  java -cp out tr.testodasi.heuristic.Main --verbose --csv");
+    System.out.println("  java -cp out tr.testodasi.heuristic.Main --dumpProject=P1 --csvDir=csv_out");
   }
 
   private static void printSolution(Solution s) {

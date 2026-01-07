@@ -1,0 +1,5 @@
+instanceId,projectId,dueDateDays,needsVolt,initialSamples,enableSampleIncrease,enableRoomLS,validate,GasAmount,Pulldown,EE_32,EE_25,EE_16,Perf_25,Perf_43,Perf_38,Perf_32,Perf_16,Perf_10,FreezingC,TemperatureRise,CU_10,CU_25,CU_32
+I1,P1,90,0,2,true,true,true,1,1,1,0,1,1,0,1,0,0,1,0,0,1,1,1
+I1,P2,40,1,2,true,true,true,1,1,1,0,1,1,0,1,0,1,0,0,0,1,1,1
+I2,P1,60,0,2,false,false,true,1,1,1,0,1,1,0,1,0,0,1,0,0,1,1,1
+I2,P2,45,1,2,false,false,true,1,1,0,1,0,1,1,0,0,1,0,1,1,1,1,1
