@@ -23,11 +23,29 @@ public final class Main {
     String csvDir = null;
     boolean csvFlag = false;
     boolean diagnose = false;
+    String batchPath = null;
+    String batchOut = null;
     for (int idx = 0; idx < args.length; idx++) {
       String a = args[idx];
       if ("--help".equalsIgnoreCase(a) || "-h".equalsIgnoreCase(a) || "-?".equalsIgnoreCase(a)) {
         printHelp();
         return;
+      }
+      if (a != null && startsWithIgnoreCase(a, "--batch=")) {
+        batchPath = a.substring("--batch=".length()).trim();
+      } else if ("--batch".equalsIgnoreCase(a)) {
+        if (idx + 1 < args.length) {
+          batchPath = args[idx + 1].trim();
+          idx++;
+        }
+      }
+      if (a != null && startsWithIgnoreCase(a, "--batchout=")) {
+        batchOut = a.substring("--batchout=".length()).trim();
+      } else if ("--batchOut".equalsIgnoreCase(a) || "--batchout".equalsIgnoreCase(a)) {
+        if (idx + 1 < args.length) {
+          batchOut = args[idx + 1].trim();
+          idx++;
+        }
       }
       if ("--verbose".equalsIgnoreCase(a) || "-v".equalsIgnoreCase(a)) {
         verbose = true;
@@ -157,6 +175,17 @@ public final class Main {
       System.out.println("- ENABLE_ROOM_LOCAL_SEARCH=" + Data.ENABLE_ROOM_LOCAL_SEARCH);
     }
 
+    if (batchPath != null && !batchPath.isBlank()) {
+      String out = (batchOut == null || batchOut.isBlank()) ? "batch_results.csv" : batchOut;
+      try {
+        BatchRunner.run(Paths.get(batchPath), Paths.get(out), verbose);
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to run batch: " + batchPath, e);
+      }
+      System.out.println("Batch results written to: " + Paths.get(out).toAbsolutePath());
+      return;
+    }
+
     HeuristicSolver solver = new HeuristicSolver(verbose);
     List<Solution> sols = solver.solve();
 
@@ -211,6 +240,8 @@ public final class Main {
     System.out.println("Options:");
     System.out.println("  -h, --help                 Show this help and exit");
     System.out.println("  -v, --verbose              Print effective options + extra logs");
+    System.out.println("  --batch <instances.csv>    Run multiple instances and write one summary CSV");
+    System.out.println("  --batchOut <out.csv>       Output path for batch summary (default: batch_results.csv)");
     System.out.println("  --dumpProject=P17          Dump detailed schedule for one project id");
     System.out.println("  --dumpFirst10              Dump detailed schedule for P1..P10");
     System.out.println("  --diagnose, --diag         Print capacity/workload diagnostics");

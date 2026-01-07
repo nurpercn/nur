@@ -1,0 +1,3 @@
+instanceId,projects,bestIteration,totalLateness,totalSamples,horizonDays,avgStationUtil,maxStationUtil,avgChamberUtil,runtimeMs
+I1,2,1,0,7,70,0.199248,0.428571,0.039931,122
+I2,2,1,40,4,75,0.185926,0.346667,0.048025,1

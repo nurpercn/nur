@@ -24,6 +24,12 @@ public final class HeuristicSolver {
 
   public List<Solution> solve() {
     List<Project> projects = Data.buildProjects(Data.INITIAL_SAMPLES);
+    return solveWithProjects(projects);
+  }
+
+  /** Runs solver using the given project list (for batch/CSV instances). */
+  public List<Solution> solveWithProjects(List<Project> projects) {
+    Objects.requireNonNull(projects);
 
     List<Solution> solutions = new ArrayList<>();
     Map<String, Env> prevRoom = null;

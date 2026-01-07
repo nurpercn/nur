@@ -31,6 +31,36 @@ java -cp out tr.testodasi.heuristic.Main --verbose --csv
 java -cp out tr.testodasi.heuristic.Main --dumpProject=P1 --csvDir=csv_out
 ```
 
+## Batch (Excel/CSV ile 40 instance)
+
+Excel’den tek bir CSV export edip, aynı komutla tüm instance’ları çalıştırabilirsiniz.
+
+### `instances.csv` formatı
+
+Zorunlu kolonlar (case-insensitive):
+
+- `instanceId`
+- `projectId`
+- `dueDateDays`
+- `needsVolt` (0/1 veya true/false)
+- Test matrisi kolonları: `Data.MATRIX_COLUMNS` ile aynı isim/sıra (0/1)
+
+Opsiyonel kolonlar:
+
+- `samples` (proje bazlı başlangıç sample sayısı)
+- `initialSamples` (instance bazlı varsayılan sample; `samples` yoksa kullanılır)
+- `enableSampleIncrease`, `sampleMax`, `sampleSearchMaxEvals`
+- `enableRoomLS`, `roomLSMaxEvals`, `roomLSSwap`, `roomLSMove`, `roomLSIncludeSample`
+- `validate`
+
+### Çalıştırma
+
+```bash
+java -cp out tr.testodasi.heuristic.Main --batch instances.csv --batchOut batch_results.csv
+```
+
+Çıktı: `batch_results.csv` (tek dosya; satır başına 1 instance özeti)
+
 ## Veri / Instance güncelleme
 
 Tüm veri gömülü halde `HEURISTIC/Data.java` içindedir.
