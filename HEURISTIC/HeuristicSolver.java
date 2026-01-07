@@ -277,6 +277,75 @@ public final class HeuristicSolver {
         }
       }
 
+      // If single-project moves stall, try 2-project exchange moves:
+      // one project +1 sample while another project -1 sample (keeps total samples constant).
+      if (!improvedAny && evals < evalBudget) {
+        int bestI = -1;
+        int bestJ = -1;
+        boolean bestDir = true; // true => i+1, j-1 ; false => i-1, j+1
+        Scheduler.EvalResult bestPairEval = baseEval;
+
+        for (int i = 0; i < current.size() && evals < evalBudget; i++) {
+          for (int j = i + 1; j < current.size() && evals < evalBudget; j++) {
+            int si = current.get(i).samples;
+            int sj = current.get(j).samples;
+
+            // Direction 1: i+1, j-1
+            if (si + 1 <= Data.SAMPLE_MAX && sj - 1 >= Data.MIN_SAMPLES) {
+              List<Project> cand = deepCopy(current);
+              cand.get(i).samples = si + 1;
+              cand.get(j).samples = sj - 1;
+              Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+              evals++;
+              if (e.totalLateness < bestPairEval.totalLateness) {
+                bestPairEval = e;
+                bestI = i;
+                bestJ = j;
+                bestDir = true;
+              }
+            }
+
+            // Direction 2: i-1, j+1
+            if (evals >= evalBudget) break;
+            if (si - 1 >= Data.MIN_SAMPLES && sj + 1 <= Data.SAMPLE_MAX) {
+              List<Project> cand = deepCopy(current);
+              cand.get(i).samples = si - 1;
+              cand.get(j).samples = sj + 1;
+              Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+              evals++;
+              if (e.totalLateness < bestPairEval.totalLateness) {
+                bestPairEval = e;
+                bestI = i;
+                bestJ = j;
+                bestDir = false;
+              }
+            }
+          }
+        }
+
+        if (bestI >= 0 && bestJ >= 0 && bestPairEval.totalLateness < baseEval.totalLateness) {
+          Project pi = current.get(bestI);
+          Project pj = current.get(bestJ);
+          int si0 = pi.samples;
+          int sj0 = pj.samples;
+          if (bestDir) {
+            pi.samples = si0 + 1;
+            pj.samples = sj0 - 1;
+          } else {
+            pi.samples = si0 - 1;
+            pj.samples = sj0 + 1;
+          }
+          baseEval = bestPairEval;
+          improvedAny = true;
+          if (verbose) {
+            System.out.println("INFO: Stage2 accept pair exchange => " +
+                pi.id + " " + si0 + " -> " + pi.samples + ", " +
+                pj.id + " " + sj0 + " -> " + pj.samples +
+                " totalLateness=" + baseEval.totalLateness);
+          }
+        }
+      }
+
       if (!improvedAny) break;
       if (passes > 200) break; // safety
     }
