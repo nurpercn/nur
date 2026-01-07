@@ -25,6 +25,10 @@ public final class Main {
     boolean diagnose = false;
     for (int idx = 0; idx < args.length; idx++) {
       String a = args[idx];
+      if ("--help".equalsIgnoreCase(a) || "-h".equalsIgnoreCase(a) || "-?".equalsIgnoreCase(a)) {
+        printHelp();
+        return;
+      }
       if ("--verbose".equalsIgnoreCase(a) || "-v".equalsIgnoreCase(a)) {
         verbose = true;
       }
@@ -196,6 +200,44 @@ public final class Main {
     if (diagnose) {
       printDiagnostics(best);
     }
+  }
+
+  private static void printHelp() {
+    System.out.println("Heuristic scheduler (job-based EDD + room assignment)");
+    System.out.println();
+    System.out.println("Usage:");
+    System.out.println("  java -cp <classes> tr.testodasi.heuristic.Main [options]");
+    System.out.println();
+    System.out.println("Options:");
+    System.out.println("  -h, --help                 Show this help and exit");
+    System.out.println("  -v, --verbose              Print effective options + extra logs");
+    System.out.println("  --dumpProject=P17          Dump detailed schedule for one project id");
+    System.out.println("  --dumpFirst10              Dump detailed schedule for P1..P10");
+    System.out.println("  --diagnose, --diag         Print capacity/workload diagnostics");
+    System.out.println();
+    System.out.println("  --csv                      Export CSV to ./csv_out");
+    System.out.println("  --csvDir <dir>             Export CSV to <dir> (creates dir if missing)");
+    System.out.println("  --csvDir=<dir>             Same as above");
+    System.out.println("  --csv=<dir>                Same as above");
+    System.out.println();
+    System.out.println("Tuning flags (booleans accept: 1/true/yes):");
+    System.out.println("  --samples=<n>              Initial samples per project (min=" + Data.MIN_SAMPLES + ")");
+    System.out.println("  --samples <n>              Same as above");
+    System.out.println("  --sampleIncrease           Enable sample local-search (same as true)");
+    System.out.println("  --sampleIncrease <bool>    Enable/disable sample local-search");
+    System.out.println("  --sampleIncrease=<bool>    Enable/disable sample local-search");
+    System.out.println();
+    System.out.println("  --roomLS=<bool>            Enable/disable room local-search");
+    System.out.println("  --roomLSMaxEvals=<n>       Room local-search evaluation budget");
+    System.out.println("  --roomLSSwap=<bool>        Enable/disable swap neighbors");
+    System.out.println("  --roomLSMove=<bool>        Enable/disable move neighbors");
+    System.out.println("  --roomLSIncludeSample=<bool>  Score rooms using sample-heuristic too (slower)");
+    System.out.println();
+    System.out.println("  --validate=<bool>          Enable/disable schedule validation");
+    System.out.println();
+    System.out.println("Examples:");
+    System.out.println("  java -cp out tr.testodasi.heuristic.Main --verbose --csv");
+    System.out.println("  java -cp out tr.testodasi.heuristic.Main --dumpProject=P1 --csvDir=csv_out");
   }
 
   private static void printSolution(Solution s) {
