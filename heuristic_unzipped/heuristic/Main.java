@@ -193,6 +193,18 @@ public final class Main {
     }
 
     if (batchPath != null && !batchPath.isBlank()) {
+      // UX shortcut:
+      // - --csv / --csvDir are normally for single-run schedule export.
+      // - In batch mode, users often expect the same flag to "export CSVs".
+      // So: if user passed --csv/--csvDir without --batchDetails, treat it as batch details output dir.
+      if ((batchDetailsDir == null || batchDetailsDir.isBlank()) && (csvFlag || (csvDir != null && !csvDir.isBlank()))) {
+        batchDetailsDir = (csvDir == null || csvDir.isBlank()) ? "csv_out" : csvDir;
+        batchSchedule = true; // make it equivalent to "export schedule CSV too"
+        if (verbose) {
+          System.out.println("INFO: Batch mode: using --csv/--csvDir as --batchDetails=" + batchDetailsDir + " and enabling --batchSchedule");
+        }
+      }
+
       String out = (batchOut == null || batchOut.isBlank()) ? "batch_results.csv" : batchOut;
       try {
         BatchRunner.run(
@@ -278,6 +290,8 @@ public final class Main {
     System.out.println("  --csvDir <dir>             Export CSV to <dir> (creates dir if missing)");
     System.out.println("  --csvDir=<dir>             Same as above");
     System.out.println("  --csv=<dir>                Same as above");
+    System.out.println("                            NOTE: In batch mode, --csv/--csvDir act as a shortcut for:");
+    System.out.println("                                  --batchDetails <dir> --batchSchedule");
     System.out.println();
     System.out.println("Tuning flags (booleans accept: 1/true/yes):");
     System.out.println("  --samples=<n>              Initial samples per project (min=" + Data.MIN_SAMPLES + ")");
