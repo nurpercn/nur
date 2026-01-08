@@ -1,0 +1,21 @@
+HTTP/2 200 
+content-type: text/html; charset=utf-8
+content-length: 11784
+cache-control: private, no-cache, no-store, max-age=0, must-revalidate
+cross-origin-opener-policy: same-origin-allow-popups
+date: Wed, 17 Dec 2025 18:53:07 GMT
+etag: "wa032j5ot693c"
+referrer-policy: strict-origin-when-cross-origin
+set-cookie: native_apple_app_banner_enabled=false; Path=/; Expires=Thu, 17 Dec 2026 18:53:07 GMT; Max-Age=31536000; SameSite=lax
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+vary: Accept-Encoding
+x-content-type-options: nosniff
+x-dns-prefetch-control: on
+x-frame-options: SAMEORIGIN
+x-xss-protection: 1; mode=block
+x-cache: Miss from cloudfront
+via: 1.1 0917da16ef445f191a68e78a9846ed78.cloudfront.net (CloudFront)
+x-amz-cf-pop: HIO52-P3
+alt-svc: h3=":443"; ma=86400
+x-amz-cf-id: 7CFqh9mNfKJ7HQURtnxqS3lWNJkOt9jifqJgZehy1FsfH_hCelJHEA==
+
