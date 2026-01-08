@@ -1,0 +1,769 @@
+package tr.testodasi.heuristic;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+public final class HeuristicSolver {
+  private final Scheduler scheduler = new Scheduler();
+  private final boolean verbose;
+
+  public HeuristicSolver() {
+    this(false);
+  }
+
+  public HeuristicSolver(boolean verbose) {
+    this.verbose = verbose;
+  }
+
+  public List<Solution> solve() {
+    List<Project> projects = Data.buildProjects(Data.INITIAL_SAMPLES);
+    return solveWithProjects(projects);
+  }
+
+  /** Runs solver using the given project list (for batch/CSV instances). */
+  public List<Solution> solveWithProjects(List<Project> projects) {
+    Objects.requireNonNull(projects);
+
+    List<Solution> solutions = new ArrayList<>();
+    Map<String, Env> prevRoom = null;
+
+    List<Project> current = deepCopy(projects);
+
+    for (int iter = 1; iter <= 5; iter++) {
+      Map<String, Env> room = stage1_assignRooms(current);
+
+      if (Data.ENABLE_ROOM_LOCAL_SEARCH) {
+        RoomScore base = scoreRoom(room, current);
+        Map<String, Env> improvedRoom = improveRoomsByLocalSearch(current, room, base.totalLateness);
+        RoomScore after = scoreRoom(improvedRoom, current);
+        if (after.totalLateness < base.totalLateness) {
+          if (verbose) {
+            System.out.println("INFO: Room local-search improved total lateness: " +
+                base.totalLateness + " -> " + after.totalLateness);
+          }
+          room = improvedRoom;
+        } else if (verbose) {
+          System.out.println("INFO: Room local-search no improvement (baseline=" + base.totalLateness + ")");
+        }
+      }
+
+      // Eğer oda setleri artık değişmiyorsa sabit noktaya geldik: tekrar üretmek yerine dur.
+      if (prevRoom != null && prevRoom.equals(room)) {
+        if (verbose) {
+          System.out.println("INFO: Stage3 converged (room set unchanged). Stopping at iter=" + (iter - 1));
+        }
+        break;
+      }
+
+      // Stage2: EDD scheduling + sample artırma
+      List<Project> improved = Data.ENABLE_SAMPLE_INCREASE ? stage2_increaseSamples(room, current) : deepCopy(current);
+      Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
+
+      solutions.add(new Solution(iter, eval.totalLateness, deepCopy(improved), room, eval.projectResults, eval.schedule));
+
+      if (Data.ENABLE_SCHEDULE_VALIDATION) {
+        List<String> violations = Scheduler.validateSchedule(improved, room, eval.schedule);
+        if (!violations.isEmpty()) {
+          StringBuilder sb = new StringBuilder();
+          sb.append("Schedule validation failed (").append(violations.size()).append(" violations). First 20:\n");
+          for (int i = 0; i < Math.min(20, violations.size()); i++) {
+            sb.append("- ").append(violations.get(i)).append("\n");
+          }
+          throw new IllegalStateException(sb.toString());
+        }
+      }
+
+      prevRoom = room;
+      current = deepCopy(improved);
+    }
+
+    return solutions;
+  }
+
+  private record RoomScore(int totalLateness) {}
+
+  private RoomScore scoreRoom(Map<String, Env> room, List<Project> projects) {
+    if (Data.ROOM_LS_INCLUDE_SAMPLE_HEURISTIC) {
+      List<Project> improved = stage2_increaseSamples(room, projects);
+      Scheduler.EvalResult eval = scheduler.evaluate(improved, room);
+      return new RoomScore(eval.totalLateness);
+    }
+    Scheduler.EvalResult eval = scheduler.evaluate(projects, room);
+    return new RoomScore(eval.totalLateness);
+  }
+
+  private Map<String, Env> improveRoomsByLocalSearch(List<Project> projects, Map<String, Env> startRoom, int baseline) {
+    int maxEvals = Math.max(10, Data.ROOM_LS_MAX_EVALS);
+    Map<String, Env> best = new LinkedHashMap<>(startRoom);
+    int bestScore = baseline;
+
+    // demanded env set from current projects
+    Set<Env> demanded = new LinkedHashSet<>();
+    Set<Env> demandedByVolt = new LinkedHashSet<>();
+    for (Project p : projects) {
+      for (int ti = 0; ti < Data.TESTS.size(); ti++) {
+        if (!p.required[ti]) continue;
+        Env env = Data.TESTS.get(ti).env;
+        demanded.add(env);
+        if (p.needsVoltage) demandedByVolt.add(env);
+      }
+    }
+    if (demanded.isEmpty()) return best;
+
+    int evals = 0;
+    boolean improvedAny;
+    do {
+      improvedAny = false;
+
+      // SWAP neighbors
+      if (Data.ROOM_LS_ENABLE_SWAP) {
+        for (int i = 0; i < Data.CHAMBERS.size() && evals < maxEvals; i++) {
+          for (int j = i + 1; j < Data.CHAMBERS.size() && evals < maxEvals; j++) {
+            ChamberSpec ci = Data.CHAMBERS.get(i);
+            ChamberSpec cj = Data.CHAMBERS.get(j);
+            Env ei = best.get(ci.id);
+            Env ej = best.get(cj.id);
+            if (ei == null || ej == null || ei.equals(ej)) continue;
+            if (!canAssign(ci, ej) || !canAssign(cj, ei)) continue;
+
+            Map<String, Env> candRoom = new LinkedHashMap<>(best);
+            candRoom.put(ci.id, ej);
+            candRoom.put(cj.id, ei);
+            if (!isRoomFeasible(candRoom, demanded, demandedByVolt)) continue;
+            evals++;
+            int s = scoreRoom(candRoom, projects).totalLateness;
+            if (s < bestScore) {
+              best = candRoom;
+              bestScore = s;
+              improvedAny = true;
+              break;
+            }
+          }
+          if (improvedAny) break;
+        }
+      }
+
+      // MOVE neighbors
+      if (!improvedAny && Data.ROOM_LS_ENABLE_MOVE) {
+        for (int i = 0; i < Data.CHAMBERS.size() && evals < maxEvals; i++) {
+          ChamberSpec c = Data.CHAMBERS.get(i);
+          Env cur = best.get(c.id);
+          for (Env target : demanded) {
+            if (evals >= maxEvals) break;
+            if (target.equals(cur)) continue;
+            if (!canAssign(c, target)) continue;
+            Map<String, Env> candRoom = new LinkedHashMap<>(best);
+            candRoom.put(c.id, target);
+            if (!isRoomFeasible(candRoom, demanded, demandedByVolt)) continue;
+            evals++;
+            int s = scoreRoom(candRoom, projects).totalLateness;
+            if (s < bestScore) {
+              best = candRoom;
+              bestScore = s;
+              improvedAny = true;
+              break;
+            }
+          }
+          if (improvedAny) break;
+        }
+      }
+
+    } while (improvedAny && evals < maxEvals);
+
+    if (verbose) {
+      System.out.println("INFO: Room local-search evals=" + evals + " best=" + bestScore + " baseline=" + baseline);
+    }
+    return best;
+  }
+
+  private static boolean canAssign(ChamberSpec chamber, Env env) {
+    if (env.humidity == Humidity.H85 && !chamber.humidityAdjustable) return false;
+    return true;
+  }
+
+  private static boolean isRoomFeasible(Map<String, Env> room, Set<Env> demanded, Set<Env> demandedByVolt) {
+    // (1) each demanded env has at least 1 room
+    Map<Env, Integer> count = new HashMap<>();
+    Map<Env, Integer> countVoltRooms = new HashMap<>();
+    Map<String, ChamberSpec> chamberById = new HashMap<>();
+    for (ChamberSpec c : Data.CHAMBERS) chamberById.put(c.id, c);
+
+    for (var e : room.entrySet()) {
+      Env env = e.getValue();
+      if (env == null) continue;
+      ChamberSpec ch = chamberById.get(e.getKey());
+      if (ch == null) continue;
+      // humidity feasibility
+      if (env.humidity == Humidity.H85 && !ch.humidityAdjustable) return false;
+      count.merge(env, 1, Integer::sum);
+      if (ch.voltageCapable) countVoltRooms.merge(env, 1, Integer::sum);
+    }
+    for (Env env : demanded) {
+      if (count.getOrDefault(env, 0) <= 0) return false;
+    }
+    // (2) env demanded by voltage projects should have at least 1 voltage-capable room
+    for (Env env : demandedByVolt) {
+      if (countVoltRooms.getOrDefault(env, 0) <= 0) return false;
+    }
+    return true;
+  }
+
+  private List<Project> stage2_increaseSamples(Map<String, Env> room, List<Project> startProjects) {
+    List<Project> current = deepCopy(startProjects);
+
+    // enforce minimum samples
+    for (Project p : current) {
+      if (p.samples < Data.MIN_SAMPLES) p.samples = Data.MIN_SAMPLES;
+    }
+
+    Scheduler.EvalResult baseEval = scheduler.evaluate(current, room);
+    if (verbose) {
+      System.out.println("INFO: Stage2 initial total lateness = " + baseEval.totalLateness);
+    }
+
+    // Keep best solution encountered (because we may apply "shake" moves that can worsen temporarily).
+    List<Project> bestOverall = deepCopy(current);
+    Scheduler.EvalResult bestOverallEval = baseEval;
+    int bestOverallTotalSamples = totalSamples(bestOverall);
+
+    int evalBudget = Math.max(500, Data.SAMPLE_SEARCH_MAX_EVALS);
+    int evals = 0;
+    int passes = 0;
+    int shakes = 0;
+    boolean nextShakeDown = true; // alternate: down -> up -> down ...
+
+    // Per-project local search: try +1, +2, -1, -2 and accept best (min lateness).
+    // Tie-break: if lateness equal, prefer fewer samples (keeps solution minimal).
+    while (evals < evalBudget) {
+      boolean improvedAny = false;
+      passes++;
+
+      for (int i = 0; i < current.size() && evals < evalBudget; i++) {
+        Project p0 = current.get(i);
+        int curSamples = p0.samples;
+
+        int bestSamples = curSamples;
+        Scheduler.EvalResult bestEval = baseEval;
+
+        int[] deltas = (curSamples <= Data.MIN_SAMPLES)
+            ? new int[]{+1, +2}
+            : new int[]{+1, +2, -1, -2};
+        for (int d : deltas) {
+          if (evals >= evalBudget) break;
+          int ns = curSamples + d;
+          if (ns < Data.MIN_SAMPLES) continue;
+          if (ns > Data.SAMPLE_MAX) continue;
+          if (ns == curSamples) continue;
+
+          List<Project> cand = deepCopy(current);
+          cand.get(i).samples = ns;
+          Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+          evals++;
+
+          if (e.totalLateness < bestEval.totalLateness ||
+              (e.totalLateness == bestEval.totalLateness && ns < bestSamples)) {
+            bestEval = e;
+            bestSamples = ns;
+          }
+        }
+
+        boolean accept =
+            bestEval.totalLateness < baseEval.totalLateness ||
+                (bestEval.totalLateness == baseEval.totalLateness && bestSamples < curSamples);
+
+        if (accept && bestSamples != curSamples) {
+          p0.samples = bestSamples;
+          baseEval = bestEval;
+          improvedAny = true;
+          if (verbose) {
+            System.out.println("INFO: Stage2 accept sample move => " + p0.id +
+                " " + curSamples + " -> " + bestSamples +
+                " totalLateness=" + baseEval.totalLateness);
+          }
+        }
+
+        // track global best
+        if (baseEval.totalLateness < bestOverallEval.totalLateness ||
+            (baseEval.totalLateness == bestOverallEval.totalLateness && totalSamples(current) < bestOverallTotalSamples)) {
+          bestOverall = deepCopy(current);
+          bestOverallEval = baseEval;
+          bestOverallTotalSamples = totalSamples(bestOverall);
+        }
+      }
+
+      // If single-project moves stall, try 2-project exchange moves:
+      // one project +1 sample while another project -1 sample (keeps total samples constant).
+      if (!improvedAny && evals < evalBudget) {
+        int bestI = -1;
+        int bestJ = -1;
+        boolean bestDir = true; // true => i+1, j-1 ; false => i-1, j+1
+        Scheduler.EvalResult bestPairEval = baseEval;
+
+        for (int i = 0; i < current.size() && evals < evalBudget; i++) {
+          for (int j = i + 1; j < current.size() && evals < evalBudget; j++) {
+            int si = current.get(i).samples;
+            int sj = current.get(j).samples;
+
+            // Direction 1: i+1, j-1
+            if (si + 1 <= Data.SAMPLE_MAX && sj - 1 >= Data.MIN_SAMPLES) {
+              List<Project> cand = deepCopy(current);
+              cand.get(i).samples = si + 1;
+              cand.get(j).samples = sj - 1;
+              Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+              evals++;
+              if (e.totalLateness < bestPairEval.totalLateness) {
+                bestPairEval = e;
+                bestI = i;
+                bestJ = j;
+                bestDir = true;
+              }
+            }
+
+            // Direction 2: i-1, j+1
+            if (evals >= evalBudget) break;
+            if (si - 1 >= Data.MIN_SAMPLES && sj + 1 <= Data.SAMPLE_MAX) {
+              List<Project> cand = deepCopy(current);
+              cand.get(i).samples = si - 1;
+              cand.get(j).samples = sj + 1;
+              Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+              evals++;
+              if (e.totalLateness < bestPairEval.totalLateness) {
+                bestPairEval = e;
+                bestI = i;
+                bestJ = j;
+                bestDir = false;
+              }
+            }
+          }
+        }
+
+        if (bestI >= 0 && bestJ >= 0 && bestPairEval.totalLateness < baseEval.totalLateness) {
+          Project pi = current.get(bestI);
+          Project pj = current.get(bestJ);
+          int si0 = pi.samples;
+          int sj0 = pj.samples;
+          if (bestDir) {
+            pi.samples = si0 + 1;
+            pj.samples = sj0 - 1;
+          } else {
+            pi.samples = si0 - 1;
+            pj.samples = sj0 + 1;
+          }
+          baseEval = bestPairEval;
+          improvedAny = true;
+          if (verbose) {
+            System.out.println("INFO: Stage2 accept pair exchange => " +
+                pi.id + " " + si0 + " -> " + pi.samples + ", " +
+                pj.id + " " + sj0 + " -> " + pj.samples +
+                " totalLateness=" + baseEval.totalLateness);
+          }
+
+          // track global best
+          if (baseEval.totalLateness < bestOverallEval.totalLateness ||
+              (baseEval.totalLateness == bestOverallEval.totalLateness && totalSamples(current) < bestOverallTotalSamples)) {
+            bestOverall = deepCopy(current);
+            bestOverallEval = baseEval;
+            bestOverallTotalSamples = totalSamples(bestOverall);
+          }
+        }
+      }
+
+      // If still no improvement, apply "shake" to escape local optimum:
+      // - First: set 10% of projects to MIN_SAMPLES (2)
+      // - Next: set 10% of projects to 6 (bounded by SAMPLE_MAX)
+      if (!improvedAny && evals < evalBudget) {
+        boolean didShake = false;
+        if (shakes < 100) { // safety
+          if (nextShakeDown) {
+            didShake = tryShakeDownToMin(room, current, baseEval, evalBudget, evals);
+          } else {
+            didShake = tryShakeUpToSix(room, current, baseEval, evalBudget, evals);
+          }
+        }
+
+        if (didShake) {
+          // tryShake* mutates current/baseEval via returned holder
+          baseEval = lastShakeEval;
+          evals = lastShakeEvals;
+          improvedAny = true;
+          shakes++;
+          nextShakeDown = !nextShakeDown;
+
+          if (baseEval.totalLateness < bestOverallEval.totalLateness ||
+              (baseEval.totalLateness == bestOverallEval.totalLateness && totalSamples(current) < bestOverallTotalSamples)) {
+            bestOverall = deepCopy(current);
+            bestOverallEval = baseEval;
+            bestOverallTotalSamples = totalSamples(bestOverall);
+          }
+        }
+      }
+
+      if (!improvedAny) break;
+      if (passes > 200) break; // safety
+    }
+
+    if (verbose) {
+      System.out.println("INFO: Stage2 sample-search passes=" + passes + " evals=" + evals + " budget=" + evalBudget +
+          " finalTotal=" + baseEval.totalLateness);
+    }
+    return bestOverall;
+  }
+
+  // ---- Stage2 helpers (shake moves) ----
+
+  // These two fields are a small workaround to avoid threading an object through the loop.
+  // They are only used inside stage2_increaseSamples call chain.
+  private Scheduler.EvalResult lastShakeEval;
+  private int lastShakeEvals;
+
+  private static int totalSamples(List<Project> ps) {
+    int sum = 0;
+    for (Project p : ps) sum += p.samples;
+    return sum;
+  }
+
+  private boolean tryShakeDownToMin(
+      Map<String, Env> room,
+      List<Project> current,
+      Scheduler.EvalResult baseEval,
+      int evalBudget,
+      int evals
+  ) {
+    if (evals >= evalBudget) return false;
+    int k = Math.max(1, (int) Math.ceil(current.size() * 0.10));
+
+    Map<String, Integer> latenessById = new HashMap<>();
+    for (ProjectResult r : baseEval.projectResults) latenessById.put(r.projectId, r.lateness);
+
+    List<Integer> idxs = new ArrayList<>();
+    for (int i = 0; i < current.size(); i++) {
+      if (current.get(i).samples > Data.MIN_SAMPLES) idxs.add(i);
+    }
+    if (idxs.isEmpty()) return false;
+
+    idxs.sort((a, b) -> {
+      Project pa = current.get(a);
+      Project pb = current.get(b);
+      int sa = pa.samples;
+      int sb = pb.samples;
+      if (sa != sb) return Integer.compare(sb, sa); // higher samples first
+      int la = latenessById.getOrDefault(pa.id, 0);
+      int lb = latenessById.getOrDefault(pb.id, 0);
+      return Integer.compare(lb, la); // higher lateness first
+    });
+
+    List<Project> cand = deepCopy(current);
+    int changed = 0;
+    for (int t = 0; t < idxs.size() && changed < k; t++) {
+      int i = idxs.get(t);
+      if (cand.get(i).samples > Data.MIN_SAMPLES) {
+        cand.get(i).samples = Data.MIN_SAMPLES;
+        changed++;
+      }
+    }
+    if (changed == 0) return false;
+
+    Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+    evals++;
+    current.clear();
+    current.addAll(cand);
+    lastShakeEval = e;
+    lastShakeEvals = evals;
+    if (verbose) {
+      System.out.println("INFO: Stage2 shake DOWN => set " + changed + " projects to " + Data.MIN_SAMPLES +
+          " totalLateness=" + e.totalLateness);
+    }
+    return true;
+  }
+
+  private boolean tryShakeUpToSix(
+      Map<String, Env> room,
+      List<Project> current,
+      Scheduler.EvalResult baseEval,
+      int evalBudget,
+      int evals
+  ) {
+    if (evals >= evalBudget) return false;
+    int target = Math.min(6, Data.SAMPLE_MAX);
+    if (target < Data.MIN_SAMPLES) target = Data.MIN_SAMPLES;
+    int k = Math.max(1, (int) Math.ceil(current.size() * 0.10));
+
+    Map<String, Integer> latenessById = new HashMap<>();
+    for (ProjectResult r : baseEval.projectResults) latenessById.put(r.projectId, r.lateness);
+
+    List<Integer> idxs = new ArrayList<>();
+    for (int i = 0; i < current.size(); i++) {
+      if (current.get(i).samples < target) idxs.add(i);
+    }
+    if (idxs.isEmpty()) return false;
+
+    int finalTarget = target;
+    idxs.sort((a, b) -> {
+      Project pa = current.get(a);
+      Project pb = current.get(b);
+      int la = latenessById.getOrDefault(pa.id, 0);
+      int lb = latenessById.getOrDefault(pb.id, 0);
+      if (la != lb) return Integer.compare(lb, la); // higher lateness first
+      // for same lateness, boost those further from target (lower samples first)
+      int da = finalTarget - pa.samples;
+      int db = finalTarget - pb.samples;
+      return Integer.compare(db, da);
+    });
+
+    List<Project> cand = deepCopy(current);
+    int changed = 0;
+    for (int t = 0; t < idxs.size() && changed < k; t++) {
+      int i = idxs.get(t);
+      if (cand.get(i).samples < finalTarget) {
+        cand.get(i).samples = finalTarget;
+        changed++;
+      }
+    }
+    if (changed == 0) return false;
+
+    Scheduler.EvalResult e = scheduler.evaluate(cand, room);
+    evals++;
+    current.clear();
+    current.addAll(cand);
+    lastShakeEval = e;
+    lastShakeEvals = evals;
+    if (verbose) {
+      System.out.println("INFO: Stage2 shake UP => set " + changed + " projects to " + finalTarget +
+          " totalLateness=" + e.totalLateness);
+    }
+    return true;
+  }
+
+  /**
+   * Aşama 1: Oda set değerlerini belirle (sıcaklık/nem sabit kalır).
+   *
+   * Amaç:
+   * - Tüm iş yükünü (env bazında jobDays) ODALAR arasında tek bir global dengeleme ile dağıt.
+   * - Voltaj gerektiren iş yükü için voltaj-capable odalarda env kapasitesi ayır (en az 1 volt oda / volt-env).
+   * - 85% nem isteyen env sadece humAdj odalara atanabilir.
+   *
+   * Not: Burada job'ları tek tek odaya atamıyoruz; her oda 1 env'e sabitleniyor.
+   * Scheduler daha sonra bu oda/env set değerleri üzerinde job'ları istasyonlara yerleştiriyor.
+   */
+  private Map<String, Env> stage1_assignRooms(List<Project> projects) {
+    Objects.requireNonNull(projects);
+
+    Map<Env, Long> demandTotal = new HashMap<>();
+    Map<Env, Long> demandVolt = new HashMap<>();
+
+    // İş listesi -> env bazlı toplam iş yükü (jobCount * durationDays).
+    // Bu set sadece gerçekten talep olan env'leri içerir (dengeyi bozan gereksiz atamaları engeller).
+    Set<Env> demandedEnvs = new LinkedHashSet<>();
+
+    for (Project p : projects) {
+      for (int ti = 0; ti < Data.TESTS.size(); ti++) {
+        if (!p.required[ti]) continue;
+        TestDef t = Data.TESTS.get(ti);
+
+        int jobs = 1;
+        if (t.category == TestCategory.PULLDOWN) jobs = p.samples;
+
+        long w = (long) jobs * (long) t.durationDays;
+        // Pulldown için ekstra ağırlık kullanılmıyor.
+        demandTotal.merge(t.env, w, Long::sum);
+        if (p.needsVoltage) demandVolt.merge(t.env, w, Long::sum);
+        demandedEnvs.add(t.env);
+      }
+    }
+
+    if (demandedEnvs.isEmpty()) {
+      throw new IllegalStateException("No demanded environments; check project test matrix.");
+    }
+
+    // Hangi env'lerde voltaj talebi var?
+    Set<Env> demandedVoltEnvs = new LinkedHashSet<>();
+    for (Env env : demandedEnvs) {
+      if (demandVolt.getOrDefault(env, 0L) > 0) demandedVoltEnvs.add(env);
+    }
+
+    // Total/volt station budgets (for proportional targets)
+    int totalStationsAll = 0;
+    int totalStationsVoltCapable = 0;
+    for (ChamberSpec c : Data.CHAMBERS) {
+      totalStationsAll += c.stations;
+      if (c.voltageCapable) totalStationsVoltCapable += c.stations;
+    }
+    long sumDemandTotal = 0;
+    long sumDemandVolt = 0;
+    for (Env env : demandedEnvs) sumDemandTotal += Math.max(0L, demandTotal.getOrDefault(env, 0L));
+    for (Env env : demandedVoltEnvs) sumDemandVolt += Math.max(0L, demandVolt.getOrDefault(env, 0L));
+    if (sumDemandTotal <= 0) {
+      throw new IllegalStateException("Total demand is zero; cannot assign rooms.");
+    }
+
+    Map<Env, Double> targetStationsTotal = new HashMap<>();
+    for (Env env : demandedEnvs) {
+      double frac = demandTotal.getOrDefault(env, 0L) / (double) sumDemandTotal;
+      targetStationsTotal.put(env, frac * totalStationsAll);
+    }
+    Map<Env, Double> targetStationsVolt = new HashMap<>();
+    for (Env env : demandedEnvs) {
+      if (sumDemandVolt <= 0 || demandVolt.getOrDefault(env, 0L) <= 0) {
+        targetStationsVolt.put(env, 0.0);
+      } else {
+        double frac = demandVolt.getOrDefault(env, 0L) / (double) sumDemandVolt;
+        targetStationsVolt.put(env, frac * totalStationsVoltCapable);
+      }
+    }
+
+    // Current assigned station totals
+    Map<Env, Integer> assignedStationsTotal = new HashMap<>();
+    Map<Env, Integer> assignedStationsVolt = new HashMap<>();
+    Map<Env, Integer> roomCount = new HashMap<>();
+    Map<Env, Integer> voltRoomCount = new HashMap<>();
+
+    // Work on a mutable pool of chambers.
+    List<ChamberSpec> unassigned = Data.CHAMBERS.stream()
+        .sorted(Comparator.comparingInt((ChamberSpec c) -> c.stations).reversed())
+        .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+
+    Map<String, Env> assignment = new LinkedHashMap<>();
+
+    // (A) Hard coverage: each volt-demand env gets at least 1 voltage-capable room.
+    if (!demandedVoltEnvs.isEmpty()) {
+      // pick smaller voltage rooms first for coverage (keeps big rooms for balancing)
+      List<ChamberSpec> voltRoomsAsc = Data.CHAMBERS.stream()
+          .filter(c -> c.voltageCapable)
+          .sorted(Comparator.comparingInt(c -> c.stations))
+          .toList();
+
+      for (Env env : demandedVoltEnvs) {
+        if (voltRoomCount.getOrDefault(env, 0) > 0) continue;
+        ChamberSpec chosen = null;
+        double bestDelta = Double.POSITIVE_INFINITY;
+        for (ChamberSpec c : voltRoomsAsc) {
+          if (!unassigned.contains(c)) continue;
+          if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
+          double d = deltaObjectiveIfAssign(env, c, targetStationsTotal, targetStationsVolt, assignedStationsTotal, assignedStationsVolt);
+          if (d < bestDelta) {
+            bestDelta = d;
+            chosen = c;
+          }
+        }
+        if (chosen == null) {
+          throw new IllegalStateException("Feasible oda ataması yok: voltajlı env " + env + " için uygun voltaj odası bulunamadı");
+        }
+        assign(assignment, chosen, env, assignedStationsTotal, assignedStationsVolt, roomCount, voltRoomCount);
+        unassigned.remove(chosen);
+      }
+    }
+
+    // (B) Hard coverage: each demanded env gets at least 1 room.
+    for (Env env : demandedEnvs) {
+      if (roomCount.getOrDefault(env, 0) > 0) continue;
+      ChamberSpec chosen = null;
+      double bestDelta = Double.POSITIVE_INFINITY;
+      for (ChamberSpec c : unassigned) {
+        if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
+        double d = deltaObjectiveIfAssign(env, c, targetStationsTotal, targetStationsVolt, assignedStationsTotal, assignedStationsVolt);
+        if (d < bestDelta) {
+          bestDelta = d;
+          chosen = c;
+        }
+      }
+      if (chosen == null) {
+        throw new IllegalStateException("Feasible oda ataması yok: env " + env + " için oda bulunamadı (humidity kısıtı?)");
+      }
+      assign(assignment, chosen, env, assignedStationsTotal, assignedStationsVolt, roomCount, voltRoomCount);
+      unassigned.remove(chosen);
+    }
+
+    // (C) Balanced fill: assign remaining rooms to minimize deviation from workload-proportional targets.
+    for (ChamberSpec c : new ArrayList<>(unassigned)) {
+      Env bestEnv = null;
+      double bestDelta = Double.POSITIVE_INFINITY;
+      for (Env env : demandedEnvs) {
+        if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
+        double d = deltaObjectiveIfAssign(env, c, targetStationsTotal, targetStationsVolt, assignedStationsTotal, assignedStationsVolt);
+        if (d < bestDelta) {
+          bestDelta = d;
+          bestEnv = env;
+        }
+      }
+      if (bestEnv == null) {
+        throw new IllegalStateException("No feasible env for chamber=" + c.id + " (humidity constraints)");
+      }
+      assign(assignment, c, bestEnv, assignedStationsTotal, assignedStationsVolt, roomCount, voltRoomCount);
+      unassigned.remove(c);
+    }
+
+    // Final feasibility checks (counts are by stations, but roomCount/voltRoomCount enforce room-level coverage).
+    for (Env env : demandedEnvs) {
+      if (roomCount.getOrDefault(env, 0) <= 0) {
+        throw new IllegalStateException("Room assignment infeasible: env " + env + " has 0 rooms");
+      }
+    }
+    for (Env env : demandedVoltEnvs) {
+      if (voltRoomCount.getOrDefault(env, 0) <= 0) {
+        throw new IllegalStateException("Room assignment infeasible: volt-demand env " + env + " has 0 voltage-capable rooms");
+      }
+    }
+
+    return assignment;
+  }
+
+  private static double deltaObjectiveIfAssign(
+      Env env,
+      ChamberSpec chamber,
+      Map<Env, Double> targetStationsTotal,
+      Map<Env, Double> targetStationsVolt,
+      Map<Env, Integer> assignedStationsTotal,
+      Map<Env, Integer> assignedStationsVolt
+  ) {
+    // Objective = SSE(total stations vs target) + wVolt * SSE(volt stations vs targetVolt)
+    // Delta computed only for the chosen env (others unchanged).
+    double wVolt = 2.0;
+
+    double tTot = targetStationsTotal.getOrDefault(env, 0.0);
+    int aTot = assignedStationsTotal.getOrDefault(env, 0);
+    double beforeTot = aTot - tTot;
+    double afterTot = (aTot + chamber.stations) - tTot;
+    double delta = (afterTot * afterTot) - (beforeTot * beforeTot);
+
+    if (chamber.voltageCapable) {
+      double tV = targetStationsVolt.getOrDefault(env, 0.0);
+      int aV = assignedStationsVolt.getOrDefault(env, 0);
+      double beforeV = aV - tV;
+      double afterV = (aV + chamber.stations) - tV;
+      delta += wVolt * ((afterV * afterV) - (beforeV * beforeV));
+    }
+    return delta;
+  }
+
+  private static void assign(
+      Map<String, Env> assignment,
+      ChamberSpec chamber,
+      Env env,
+      Map<Env, Integer> assignedStationsTotal,
+      Map<Env, Integer> assignedStationsVolt,
+      Map<Env, Integer> roomCount,
+      Map<Env, Integer> voltRoomCount
+  ) {
+    assignment.put(chamber.id, env);
+    assignedStationsTotal.merge(env, chamber.stations, Integer::sum);
+    roomCount.merge(env, 1, Integer::sum);
+    if (chamber.voltageCapable) {
+      assignedStationsVolt.merge(env, chamber.stations, Integer::sum);
+      voltRoomCount.merge(env, 1, Integer::sum);
+    }
+  }
+
+  private static List<Project> deepCopy(List<Project> ps) {
+    List<Project> out = new ArrayList<>();
+    for (Project p : ps) out.add(p.copy());
+    return out;
+  }
+
+}
