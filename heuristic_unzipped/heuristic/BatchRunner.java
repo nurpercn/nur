@@ -106,6 +106,7 @@ public final class BatchRunner {
         snap.restore(); // reset global knobs each instance
         InstanceParams ip = InstanceParams.from(rows, col);
         ip.applyToData();
+        enforceFixedSamplesKnobsIfEnabled();
 
         List<Project> projects = buildProjectsFromRows(rows, col, ip);
 
@@ -201,6 +202,11 @@ public final class BatchRunner {
         if (s != null && !s.isBlank()) perProjectSamples = parseInt(s, "samples projectId=" + pid);
       }
       int samples = perProjectSamples != null ? perProjectSamples : defaultSamples;
+
+      // If fixed samples mode is enabled, override any per-project / per-instance values.
+      if (Data.FIXED_SAMPLES != null) {
+        samples = Data.FIXED_SAMPLES;
+      }
       samples = Math.max(Data.MIN_SAMPLES, Math.min(Data.SAMPLE_MAX, samples));
 
       boolean[] req = new boolean[Data.TESTS.size()];
@@ -212,6 +218,16 @@ public final class BatchRunner {
       projects.add(new Project(pid, due, needsVolt, req, samples));
     }
     return projects;
+  }
+
+  private static void enforceFixedSamplesKnobsIfEnabled() {
+    if (Data.FIXED_SAMPLES == null) return;
+    int fs = Math.max(Data.MIN_SAMPLES, Data.FIXED_SAMPLES);
+    Data.INITIAL_SAMPLES = fs;
+    Data.SAMPLE_MAX = fs;
+    Data.ENABLE_SAMPLE_INCREASE = false;
+    // Prevent room-local-search scoring from calling sample search.
+    Data.ROOM_LS_INCLUDE_SAMPLE_HEURISTIC = false;
   }
 
   private static final class InstanceParams {
@@ -288,6 +304,7 @@ public final class BatchRunner {
     final boolean enableSampleIncrease = Data.ENABLE_SAMPLE_INCREASE;
     final int sampleMax = Data.SAMPLE_MAX;
     final int sampleSearchMaxEvals = Data.SAMPLE_SEARCH_MAX_EVALS;
+    final Integer fixedSamples = Data.FIXED_SAMPLES;
 
     final boolean enableRoomLS = Data.ENABLE_ROOM_LOCAL_SEARCH;
     final int roomLSMaxEvals = Data.ROOM_LS_MAX_EVALS;
@@ -304,6 +321,7 @@ public final class BatchRunner {
       Data.ENABLE_SAMPLE_INCREASE = enableSampleIncrease;
       Data.SAMPLE_MAX = sampleMax;
       Data.SAMPLE_SEARCH_MAX_EVALS = sampleSearchMaxEvals;
+      Data.FIXED_SAMPLES = fixedSamples;
 
       Data.ENABLE_ROOM_LOCAL_SEARCH = enableRoomLS;
       Data.ROOM_LS_MAX_EVALS = roomLSMaxEvals;

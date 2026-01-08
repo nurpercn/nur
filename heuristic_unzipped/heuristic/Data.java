@@ -55,6 +55,13 @@ public final class Data {
   /** Min sample sayısı (her proje için). */
   public static final int MIN_SAMPLES = 2;
 
+  /**
+   * Eğer null değilse, tüm projeler için sample sayısını zorla sabitler.
+   *
+   * <p>Not: Batch CSV'de per-project "samples" veya instance "initialSamples" verilse bile bu değer baskın olur.
+   */
+  public static Integer FIXED_SAMPLES = null;
+
   /** Başlangıç sample sayısı (tüm projeler için). */
   public static int INITIAL_SAMPLES = 2;
 
@@ -232,7 +239,14 @@ public final class Data {
   /** Projeleri doğrudan matristen üretir. */
   public static List<Project> buildProjects(int initialSamples) {
     if (initialSamples <= 0) throw new IllegalArgumentException("initialSamples must be positive");
-    int samples = Math.max(MIN_SAMPLES, initialSamples);
+    int samples;
+    if (FIXED_SAMPLES != null) {
+      samples = Math.max(MIN_SAMPLES, FIXED_SAMPLES);
+    } else {
+      samples = Math.max(MIN_SAMPLES, initialSamples);
+    }
+    // Always respect current upper bound too.
+    samples = Math.min(SAMPLE_MAX, samples);
 
     validateMatrix();
 
