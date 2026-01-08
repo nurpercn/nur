@@ -326,7 +326,12 @@ public final class BatchRunner {
   }
 
   private static String norm(String s) {
-    return s == null ? "" : s.trim().toLowerCase(Locale.ROOT);
+    if (s == null) return "";
+    // Handle UTF-8 BOM that often appears in Excel-exported CSVs on Windows.
+    // Example: "\uFEFFinstanceId" would fail required-column checks.
+    String x = s;
+    if (!x.isEmpty() && x.charAt(0) == '\uFEFF') x = x.substring(1);
+    return x.trim().toLowerCase(Locale.ROOT);
   }
 
   private static String get(List<String> row, Map<String, Integer> col, String key) {
@@ -370,6 +375,15 @@ public final class BatchRunner {
 
   // Minimal CSV parser (supports quotes and commas inside quotes).
   private static List<String> parseCsvLine(String line) {
+    // Many Excel exports in TR/DE locales use ';' as separator (because ',' is decimal separator).
+    // Support both ',' and ';' by choosing delimiter based on the header/content line.
+    char delim = ',';
+    if (line != null) {
+      boolean hasComma = line.indexOf(',') >= 0;
+      boolean hasSemi = line.indexOf(';') >= 0;
+      if (!hasComma && hasSemi) delim = ';';
+    }
+
     List<String> out = new ArrayList<>();
     StringBuilder cur = new StringBuilder();
     boolean inQuotes = false;
@@ -382,7 +396,7 @@ public final class BatchRunner {
         } else {
           inQuotes = !inQuotes;
         }
-      } else if (ch == ',' && !inQuotes) {
+      } else if (ch == delim && !inQuotes) {
         out.add(cur.toString());
         cur.setLength(0);
       } else {
