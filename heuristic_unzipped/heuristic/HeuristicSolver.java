@@ -618,100 +618,23 @@ public final class HeuristicSolver {
       }
     }
 
-    // Current assigned station totals
-    Map<Env, Integer> assignedStationsTotal = new HashMap<>();
-    Map<Env, Integer> assignedStationsVolt = new HashMap<>();
-    Map<Env, Integer> roomCount = new HashMap<>();
-    Map<Env, Integer> voltRoomCount = new HashMap<>();
+    // Exact (mathematical) assignment: solve the balancing objective optimally under constraints,
+    // then let Stage-3 local search further improve true schedule objective if enabled.
+    List<Env> envList = new ArrayList<>(demandedEnvs);
+    envList.sort(Comparator.comparingInt((Env e) -> e.temperatureC).thenComparing(e -> e.humidity.toString()));
 
-    // Work on a mutable pool of chambers.
-    List<ChamberSpec> unassigned = Data.CHAMBERS.stream()
-        .sorted(Comparator.comparingInt((ChamberSpec c) -> c.stations).reversed())
-        .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-
-    Map<String, Env> assignment = new LinkedHashMap<>();
-
-    // (A) Hard coverage: each volt-demand env gets at least 1 voltage-capable room.
-    if (!demandedVoltEnvs.isEmpty()) {
-      // pick smaller voltage rooms first for coverage (keeps big rooms for balancing)
-      List<ChamberSpec> voltRoomsAsc = Data.CHAMBERS.stream()
-          .filter(c -> c.voltageCapable)
-          .sorted(Comparator.comparingInt(c -> c.stations))
-          .toList();
-
-      for (Env env : demandedVoltEnvs) {
-        if (voltRoomCount.getOrDefault(env, 0) > 0) continue;
-        ChamberSpec chosen = null;
-        double bestDelta = Double.POSITIVE_INFINITY;
-        for (ChamberSpec c : voltRoomsAsc) {
-          if (!unassigned.contains(c)) continue;
-          if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
-          double d = deltaObjectiveIfAssign(env, c, targetStationsTotal, targetStationsVolt, assignedStationsTotal, assignedStationsVolt);
-          if (d < bestDelta) {
-            bestDelta = d;
-            chosen = c;
-          }
-        }
-        if (chosen == null) {
-          throw new IllegalStateException("Feasible oda ataması yok: voltajlı env " + env + " için uygun voltaj odası bulunamadı");
-        }
-        assign(assignment, chosen, env, assignedStationsTotal, assignedStationsVolt, roomCount, voltRoomCount);
-        unassigned.remove(chosen);
-      }
+    boolean[] demandedVolt = new boolean[envList.size()];
+    double[] tTot = new double[envList.size()];
+    double[] tVolt = new double[envList.size()];
+    for (int i = 0; i < envList.size(); i++) {
+      Env e = envList.get(i);
+      demandedVolt[i] = demandedVoltEnvs.contains(e);
+      tTot[i] = targetStationsTotal.getOrDefault(e, 0.0);
+      tVolt[i] = targetStationsVolt.getOrDefault(e, 0.0);
     }
 
-    // (B) Hard coverage: each demanded env gets at least 1 room.
-    for (Env env : demandedEnvs) {
-      if (roomCount.getOrDefault(env, 0) > 0) continue;
-      ChamberSpec chosen = null;
-      double bestDelta = Double.POSITIVE_INFINITY;
-      for (ChamberSpec c : unassigned) {
-        if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
-        double d = deltaObjectiveIfAssign(env, c, targetStationsTotal, targetStationsVolt, assignedStationsTotal, assignedStationsVolt);
-        if (d < bestDelta) {
-          bestDelta = d;
-          chosen = c;
-        }
-      }
-      if (chosen == null) {
-        throw new IllegalStateException("Feasible oda ataması yok: env " + env + " için oda bulunamadı (humidity kısıtı?)");
-      }
-      assign(assignment, chosen, env, assignedStationsTotal, assignedStationsVolt, roomCount, voltRoomCount);
-      unassigned.remove(chosen);
-    }
-
-    // (C) Balanced fill: assign remaining rooms to minimize deviation from workload-proportional targets.
-    for (ChamberSpec c : new ArrayList<>(unassigned)) {
-      Env bestEnv = null;
-      double bestDelta = Double.POSITIVE_INFINITY;
-      for (Env env : demandedEnvs) {
-        if (env.humidity == Humidity.H85 && !c.humidityAdjustable) continue;
-        double d = deltaObjectiveIfAssign(env, c, targetStationsTotal, targetStationsVolt, assignedStationsTotal, assignedStationsVolt);
-        if (d < bestDelta) {
-          bestDelta = d;
-          bestEnv = env;
-        }
-      }
-      if (bestEnv == null) {
-        throw new IllegalStateException("No feasible env for chamber=" + c.id + " (humidity constraints)");
-      }
-      assign(assignment, c, bestEnv, assignedStationsTotal, assignedStationsVolt, roomCount, voltRoomCount);
-      unassigned.remove(c);
-    }
-
-    // Final feasibility checks (counts are by stations, but roomCount/voltRoomCount enforce room-level coverage).
-    for (Env env : demandedEnvs) {
-      if (roomCount.getOrDefault(env, 0) <= 0) {
-        throw new IllegalStateException("Room assignment infeasible: env " + env + " has 0 rooms");
-      }
-    }
-    for (Env env : demandedVoltEnvs) {
-      if (voltRoomCount.getOrDefault(env, 0) <= 0) {
-        throw new IllegalStateException("Room assignment infeasible: volt-demand env " + env + " has 0 voltage-capable rooms");
-      }
-    }
-
-    return assignment;
+    double wVolt = 2.0;
+    return RoomAssignmentOptimizer.solveExact(Data.CHAMBERS, envList, demandedVolt, tTot, tVolt, wVolt);
   }
 
   private static double deltaObjectiveIfAssign(
