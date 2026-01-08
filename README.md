@@ -3,7 +3,7 @@
 Bu repo, test odası/oda-atama + çizelgeleme problemi için basit bir sezgisel çözücü içerir:
 
 - **Stage 1**: Odalara (chamber) çevresel set değeri (sıcaklık/nem) atama
-- **Stage 2**: Job-based EDD çizelgeleme + opsiyonel sample sayısı yerel araması
+- **Stage 2**: Job-based EDD çizelgeleme (bu repoda sample sayısı her proje için sabit: 3)
 - **Stage 3**: Oda atamasında opsiyonel local-search (swap/move)
 
 Kod giriş noktası: `tr.testodasi.heuristic.Main`
@@ -47,8 +47,8 @@ Zorunlu kolonlar (case-insensitive):
 
 Opsiyonel kolonlar:
 
-- `samples` (proje bazlı başlangıç sample sayısı)
-- `initialSamples` (instance bazlı varsayılan sample; `samples` yoksa kullanılır)
+- `samples` (proje bazlı başlangıç sample sayısı) *(bu repoda sabit sample=3 zorlanır, kolon varsa yok sayılır)*
+- `initialSamples` (instance bazlı varsayılan sample; `samples` yoksa kullanılır) *(bu repoda yok sayılır)*
 - `enableSampleIncrease`, `sampleMax`, `sampleSearchMaxEvals`
 - `enableRoomLS`, `roomLSMaxEvals`, `roomLSSwap`, `roomLSMove`, `roomLSIncludeSample`
 - `validate`
